@@ -26,7 +26,7 @@ body:
     attributes:
       label: Diagnostics
       description: |
-        Right-click the Performance Companion tray icon > Troubleshooting > **Report an issue** (or **Copy diagnostics**), then click here and press Ctrl+V. Your username and PC name are already hidden.
+        Right-click the Performance Companion tray icon > **Report an issue** (or Help and troubleshooting > **Copy diagnostics**), then click here and press Ctrl+V. Your username and PC name are already hidden.
       placeholder: "Click here and press Ctrl+V"
       render: text
     validations:
