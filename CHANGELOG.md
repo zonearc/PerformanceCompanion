@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.0.2 (October 2026)
+
+- **Report an issue** (Troubleshooting): opens a pre-filled bug report on GitHub with your device and diagnostics, so problems get to us with everything needed to fix them.
+- **Update checks:** looks for a new release once a day and offers it in the tray menu, or installs it by itself if you choose (Settings > Updates). Downloads are verified before they're run.
+
 ## 3.0.1 (October 2026)
 
 - **New name: Performance Companion** (briefly called Clutch during testing). Installing it imports settings from G14 Control, Laptop Control or Clutch and retires the old app.

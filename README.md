@@ -98,7 +98,9 @@ Performance Companion copies itself into place, starts with Windows, adds a Star
 
 ## Updating
 
-Download the new version and double-click it. No admin prompt, no uninstalling. Everything carries over.
+Performance Companion checks this page for a new release once a day. When there is one, you get a short message and an **Update to x.y.z** item at the top of the tray menu; one click downloads and installs it. Prefer it hands-off? Settings > Updates > **Install updates automatically** installs new versions when no game or switch is running. You can also turn checking off.
+
+Updating by hand works too: download the new version and double-click it. No admin prompt, no uninstalling. Everything carries over.
 
 ## The tray menu
 
@@ -113,7 +115,8 @@ Power plans...                          (power plans engine only)
 Schedules...   (next: Fri 19:00 Gaming)
 Apps and games...
 Settings...
-Troubleshooting                      >  Status, Copy diagnostics, activity log, GPU watch,
+Troubleshooting                      >  Status, Report an issue, Check for updates, Copy diagnostics,
+                                        activity log, GPU watch,
                                         setup check, pause, reload, uninstall
 Exit
 ```
@@ -148,7 +151,7 @@ Tray > Troubleshooting > **Uninstall**. It removes the startup tasks and shortcu
 
 ## Troubleshooting
 
-**Reporting a problem:** Tray > Troubleshooting > **Copy diagnostics**, then [open an issue](https://github.com/zonearc/PerformanceCompanion/issues/new/choose) and paste it in. It includes your device, engine, versions, settings and recent activity, with your username and PC name hidden.
+**Reporting a problem:** right-click the tray icon > Troubleshooting > **Report an issue**. Type a sentence about what went wrong and your browser opens a bug report here with your device and full diagnostics already filled in (your username and PC name are hidden). Add anything else and press Submit. It needs a free GitHub account. Please report problems here rather than on Reddit, so nothing gets lost and fixes reach everyone. It includes your device, engine, versions, settings and recent activity, with your username and PC name hidden.
 
 | Symptom | Try |
 |---|---|

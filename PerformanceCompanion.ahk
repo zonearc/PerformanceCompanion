@@ -30,8 +30,9 @@ SetTitleMatchMode 2
 ;  Replaces G14 Control, Laptop Control and Clutch: settings carry over.
 ; ====================================================================
 
-global SCRIPT_VERSION := "3.0.1"      ; bump on every release so updates announce themselves
+global SCRIPT_VERSION := "3.0.2"      ; bump on every release so updates announce themselves
 global APP_NAME       := "Performance Companion"
+global REPO_URL       := "https://github.com/zonearc/PerformanceCompanion"
 
 ; ---------- INSTALL LOCATION ----------
 global installDir     := A_AppData "\PerformanceCompanion"
@@ -126,6 +127,7 @@ global GpuIdleThreshold    := 15     ; game mode ends below this
 global SCHEDULES_ENABLED   := false  ; master switch for Tray > Schedules (off until you turn it on)
 global CUSTOM_MODES        := true   ; offer G-Helper's custom modes (by their names) as app modes
 global ENGINE_CHOICE       := "auto" ; auto | ghelper | plans
+global UPDATE_MODE         := "notify" ; notify | auto | off: checking GitHub for new versions
 global BATTERY_PROFILE     := ""     ; profile to switch to when unplugged ("" = stay), back on plug-in
 global WARN_MINUTES        := 10     ; schedules warn this long before a restart or shutdown
 
@@ -217,6 +219,8 @@ global planFails      := 0          ; failed plan switches in a row (backs off a
 global planRetryAt    := 0
 global appliedMode    := ""         ; mode Performance Companion applied last (plans backend)
 global customModes    := Map()      ; G-Helper custom modes: id -> name
+global BALANCED_GUID  := "381b4222-f694-41f0-9685-ff5bb260df2e"   ; Windows Balanced plan, the template
+global updateInfo     := ""         ; {version, url, notes} when a newer release exists on GitHub
 global switching      := false      ; a profile switch is in progress
 global schedules      := Map()      ; id -> schedule object (see SCHEDULES section)
 global schedOrder     := []
@@ -298,6 +302,8 @@ StartupSequence() {
     ShowOSD(p.name " profile active (" ProfileSummary(CurP()) ")", "Blue")
     SetTimer(ScheduleTick, 30000)
     ScheduleTick(true)               ; catch up on anything missed while the laptop was off
+    SetTimer(CheckForUpdates, -60000)
+    SetTimer(DailyUpdateCheck, 3600000)
     if (A_Args.Length && A_Args[1] = "toggle")
         ShowProfilePicker()
 }
@@ -506,7 +512,7 @@ ShowSetupCheck(mode := "manual", *) {
 ; ====================================================================
 SettingNames() => ["DEFAULT_GAME_MODE", "LEARNING_ENABLED", "GameLoadForeground", "GameLoadBackground",
     "GpuIdleThreshold", "SHUTDOWN_DELAY", "SHOW_POPUPS", "SCHEDULES_ENABLED", "CUSTOM_MODES", "WARN_MINUTES",
-    "ENGINE_CHOICE", "BATTERY_PROFILE"]
+    "ENGINE_CHOICE", "BATTERY_PROFILE", "UPDATE_MODE"]
 
 ; Explicit get/set for each setting (clearer and safer than dynamic names).
 GetSetting(name) {
@@ -523,13 +529,14 @@ GetSetting(name) {
         case "WARN_MINUTES":       return WARN_MINUTES
         case "ENGINE_CHOICE":      return ENGINE_CHOICE
         case "BATTERY_PROFILE":    return BATTERY_PROFILE
+        case "UPDATE_MODE":        return UPDATE_MODE
     }
     return ""
 }
 
 SetSetting(name, v) {
     global DEFAULT_GAME_MODE, LEARNING_ENABLED, GameLoadForeground, GameLoadBackground, GpuIdleThreshold
-    global SHUTDOWN_DELAY, SHOW_POPUPS, SCHEDULES_ENABLED, CUSTOM_MODES, WARN_MINUTES, ENGINE_CHOICE, BATTERY_PROFILE
+    global SHUTDOWN_DELAY, SHOW_POPUPS, SCHEDULES_ENABLED, CUSTOM_MODES, WARN_MINUTES, ENGINE_CHOICE, BATTERY_PROFILE, UPDATE_MODE
     switch name {
         case "DEFAULT_GAME_MODE":  DEFAULT_GAME_MODE := v
         case "LEARNING_ENABLED":   LEARNING_ENABLED := v
@@ -543,6 +550,7 @@ SetSetting(name, v) {
         case "WARN_MINUTES":       WARN_MINUTES := v
         case "ENGINE_CHOICE":      ENGINE_CHOICE := v
         case "BATTERY_PROFILE":    BATTERY_PROFILE := v
+        case "UPDATE_MODE":        UPDATE_MODE := v
     }
 }
 
@@ -657,6 +665,15 @@ ShowSettings(*) {
     AddTip(schCb, "Master switch for timed profile switches and trip charging.`n"
         . "Off until you turn it on. Each schedule also has its own on/off.")
 
+    Section("Updates")
+    updIds := ["notify", "auto", "off"]
+    Row("New versions", "Performance Companion checks GitHub once a day for a newer release.`n"
+        . "Tell me: a message and an Update item in the tray menu.`n"
+        . "Install automatically: downloads and installs when no game or switch is running.`n"
+        . "Your settings, profiles and games always carry over.")
+    updDdl := g.Add("DropDownList", "x+4 yp-3 w280", ["Tell me when there's an update", "Install updates automatically", "Don't check"])
+    updDdl.Choose(IndexOf(updIds, UPDATE_MODE))
+
     Section("Notifications")
     popCb := g.Add("Checkbox", "xm+12 y+10", "Show on-screen popups")
     popCb.Value := SHOW_POPUPS
@@ -697,6 +714,7 @@ ShowSettings(*) {
         SaveSetting("SHOW_POPUPS", popCb.Value)
         SetSchedulesEnabled(schCb.Value, wasSched)
         SaveSetting("BATTERY_PROFILE", unIds[unDdl.Value])
+        SaveSetting("UPDATE_MODE", updIds[updDdl.Value])
         newEng := engIds[engDdl.Value]
         engChanged := (newEng != ENGINE_CHOICE)
         SaveSetting("ENGINE_CHOICE", newEng)
@@ -4082,6 +4100,12 @@ BuildMenu() {
     m := A_TrayMenu
     m.Delete()
 
+    if IsObject(updateInfo) {
+        upd := "Update to " updateInfo.version
+        m.Add(upd, (*) => InstallUpdate())
+        m.Add()
+    }
+
     ; --- current game and its mode ---
     t := GameTarget()
     if (t.exe = "") {
@@ -4152,6 +4176,8 @@ BuildMenu() {
     ; Diagnostics live one level down, out of the way of everyday use.
     tr := Menu()
     tr.Add("Status", ShowStatus)
+    tr.Add("Report an issue...", ReportIssue)
+    tr.Add("Check for updates", (*) => CheckForUpdates(true))
     tr.Add("Copy diagnostics (for bug reports)", CopyDiagnostics)
     tr.Add("Open activity log", (*) => FileExist(LOGFILE) ? Run('notepad.exe "' LOGFILE '"') : ShowOSD("No activity logged yet", "Blue", true))
     tr.Add("Clear activity log", ClearLog)
@@ -4528,6 +4554,75 @@ CopyDiagnostics(*) {
         Run('notepad.exe "' f '"')
 }
 
+; ---------- Report an issue ----------
+; Opens a pre-filled bug report on GitHub. Apps can't post issues for
+; you without storing a password or token, so this fills in everything
+; it can in the browser; you review it and press Submit.
+
+UrlEncode(str) {
+    buf := Buffer(StrPut(str, "UTF-8"), 0)
+    StrPut(str, buf, "UTF-8")
+    out := ""
+    Loop buf.Size - 1 {
+        b := NumGet(buf, A_Index - 1, "UChar")
+        out .= ((b >= 0x30 && b <= 0x39) || (b >= 0x41 && b <= 0x5A) || (b >= 0x61 && b <= 0x7A) || b = 0x2D || b = 0x2E || b = 0x5F || b = 0x7E)
+            ? Chr(b) : Format("%{:02X}", b)
+    }
+    return out
+}
+
+ReportIssue(*) {
+    g := Gui("+AlwaysOnTop", "Report an issue")
+    g.SetFont("s10", "Segoe UI")
+    g.MarginX := 16, g.MarginY := 12
+    g.Add("Text", "w460", "What went wrong? A sentence or two is plenty. Your browser then opens a bug report with this, "
+        . "your device and full diagnostics filled in. You can add more there before pressing Submit.")
+    ed := g.Add("Edit", "w460 r5")
+    g.SetFont("s9 cGray")
+    g.Add("Text", "w460 y+6", "Needs a free GitHub account. Your username and PC name are hidden in the diagnostics.")
+    g.SetFont("s10 norm cDefault")
+    b := g.Add("Button", "w150 y+12 Default", "Open bug report")
+    b.OnEvent("Click", (*) => Go())
+    b2 := g.Add("Button", "x+8 w90", "Cancel")
+    b2.OnEvent("Click", (*) => g.Destroy())
+    g.OnEvent("Escape", (*) => g.Destroy())
+    g.Show()
+
+    Go() {
+        what := Trim(ed.Value)
+        g.Destroy()
+        ShowOSD("Collecting diagnostics...", "Blue", true)
+        try {
+            rep := BuildDiagnostics()
+        } catch as e {
+            rep := "Diagnostics failed: " e.Message " (line " e.Line ")"
+        }
+        f := installDir "\diagnostics.txt"
+        try FileDelete(f)
+        try FileAppend(rep, f, "UTF-8")
+        A_Clipboard := rep
+        dev := DEVICE.handheld != "" ? DEVICE.handheld " (" DEVICE.model ")" : DEVICE.maker " " DEVICE.model
+        title := "[" SCRIPT_VERSION "] " (what = "" ? "Problem on " dev : SubStr(RegExReplace(what, "\s+", " "), 1, 70))
+        url := REPO_URL "/issues/new?template=bug_report.yml&title=" UrlEncode(title)
+            . "&what=" UrlEncode(what = "" ? "(describe what happened)" : what)
+            . "&device=" UrlEncode(Mask(dev))
+        ; Browsers and GitHub cap link length; long reports go via the clipboard.
+        inline := UrlEncode(rep)
+        pasted := (StrLen(url) + StrLen(inline) < 7500)
+        url .= "&diagnostics=" (pasted ? inline : UrlEncode("Press Ctrl+V here: Performance Companion copied the full diagnostics to your clipboard."))
+        Log("REPORT      opened a pre-filled bug report" (pasted ? "" : " (diagnostics on clipboard)"))
+        try {
+            Run(url)
+        } catch {
+            MsgBox("Couldn't open your browser. The diagnostics are on your clipboard; paste them at`n" REPO_URL "/issues", "Report an issue", "Icon!")
+            return
+        }
+        if !pasted
+            MsgBox("Your browser is opening the bug report.`n`nThe diagnostics are long, so they're on your clipboard: "
+                . "click the Diagnostics box and press Ctrl+V, then Submit.", "Report an issue", "Iconi T30")
+    }
+}
+
 ; ====================================================================
 ;  ENGINES, DEVICE DETECTION AND IMPORT
 ;
@@ -4846,7 +4941,6 @@ VendorTips() {
 ;    Power mode         Windows' Best efficiency / Balanced / Best performance
 ;    Screen             built-in screen at 60 Hz, highest, or left alone
 ; ====================================================================
-global BALANCED_GUID := "381b4222-f694-41f0-9685-ff5bb260df2e"
 
 PlanKeys() => ["eco", "work", "performance"]
 ModeKey(m) => m = 1 ? "performance" : m = 2 ? "eco" : "work"
@@ -5339,6 +5433,143 @@ ShowPlans(*) {
         EnforceState(true)
         ShowPlans()
     }
+}
+
+; ====================================================================
+;  UPDATES
+;  Checks GitHub for a newer release a minute after startup and then
+;  once a day. Settings > Updates:
+;      notify  (default) a message and a tray item "Update to x.y.z"
+;      auto    download and install by itself when nothing is running
+;      off     never check
+;  Installing runs the downloaded file, which replaces this copy the
+;  same way a manual update does (no admin prompt) and keeps all data.
+; ====================================================================
+
+
+; "3.0.10" > "3.0.9"; ignores a leading "v".
+VersionCompare(a, b) {
+    pa := StrSplit(RegExReplace(a, "i)^v"), "."), pb := StrSplit(RegExReplace(b, "i)^v"), ".")
+    Loop Max(pa.Length, pb.Length) {
+        x := (A_Index <= pa.Length && IsInteger(pa[A_Index])) ? Integer(pa[A_Index]) : 0
+        y := (A_Index <= pb.Length && IsInteger(pb[A_Index])) ? Integer(pb[A_Index]) : 0
+        if (x != y)
+            return x > y ? 1 : -1
+    }
+    return 0
+}
+
+HttpGet(url, timeoutSec := 15) {
+    req := ComObject("WinHttp.WinHttpRequest.5.1")
+    req.SetTimeouts(timeoutSec * 1000, timeoutSec * 1000, timeoutSec * 1000, timeoutSec * 1000)
+    req.Open("GET", url, false)
+    req.SetRequestHeader("User-Agent", "PerformanceCompanion/" SCRIPT_VERSION)
+    req.SetRequestHeader("Accept", "application/vnd.github+json")
+    req.Send()
+    if (req.Status != 200)
+        throw Error("HTTP " req.Status)
+    return req.ResponseText
+}
+
+; Reads the latest release. Returns {version, url, notes} or "".
+LatestRelease() {
+    api := StrReplace(REPO_URL, "https://github.com/", "https://api.github.com/repos/") "/releases/latest"
+    j := HttpGet(api)
+    if !RegExMatch(j, '"tag_name"\s*:\s*"([^"]+)"', &t)
+        return ""
+    url := ""
+    if RegExMatch(j, '"browser_download_url"\s*:\s*"([^"]+\.ahk)"', &u)
+        url := u[1]
+    notes := ""
+    if RegExMatch(j, '"body"\s*:\s*"((?:[^"\\]|\\.)*)"', &n)
+        notes := StrReplace(StrReplace(StrReplace(n[1], "\r\n", "`n"), "\n", "`n"), '\"', '"')
+    return {version: RegExReplace(t[1], "i)^v"), url: url, notes: notes}
+}
+
+CheckForUpdates(manual := false, *) {
+    global updateInfo
+    if (UPDATE_MODE = "off" && !manual)
+        return
+    try {
+        rel := LatestRelease()
+    } catch as e {
+        if manual
+            MsgBox("Couldn't reach GitHub to check for updates (" e.Message ").`nYou can always download the latest version from:`n" REPO_URL "/releases/latest",
+                "Performance Companion", "Icon!")
+        return
+    }
+    IniWrite(A_Now, STATE, "app", "update_checked")
+    if (!IsObject(rel) || VersionCompare(rel.version, SCRIPT_VERSION) <= 0) {
+        updateInfo := ""
+        if manual
+            MsgBox("You're on the latest version (" SCRIPT_VERSION ").", "Performance Companion", "Iconi")
+        UpdateUI()
+        return
+    }
+    updateInfo := rel
+    UpdateUI()
+    if (UPDATE_MODE = "auto" && !manual && rel.url != "") {
+        SetTimer(AutoInstallWhenIdle, 60000)
+        AutoInstallWhenIdle()
+        return
+    }
+    if (manual || IniRead(STATE, "app", "update_announced", "") != rel.version) {
+        IniWrite(rel.version, STATE, "app", "update_announced")
+        Log("UPDATE      " rel.version " available (you have " SCRIPT_VERSION ")")
+        if manual {
+            if (MsgBox("Performance Companion " rel.version " is available (you have " SCRIPT_VERSION ").`n`nInstall it now?",
+                "Performance Companion", "YesNo Iconi") = "Yes")
+                InstallUpdate()
+        } else {
+            ShowOSD("Performance Companion " rel.version " is available: tray menu > Update", "Blue", true)
+            try TrayTip("Version " rel.version " is available. Right-click the tray icon > Update to install it.", "Performance Companion", "Iconi")
+        }
+    }
+}
+
+; Auto mode: wait until no game or app mode, switch or schedule is active.
+AutoInstallWhenIdle() {
+    if (!IsObject(updateInfo) || switching || busy || isTurboMode || IsObject(schedPending))
+        return
+    SetTimer(AutoInstallWhenIdle, 0)
+    InstallUpdate(true)
+}
+
+InstallUpdate(silent := false, *) {
+    if !IsObject(updateInfo) {
+        CheckForUpdates(true)
+        return
+    }
+    if (updateInfo.url = "") {
+        Run(REPO_URL "/releases/latest")
+        return
+    }
+    tmp := A_Temp "\PerformanceCompanion-" updateInfo.version ".ahk"
+    try {
+        try FileDelete(tmp)
+        Download(updateInfo.url, tmp)
+        head := FileRead(tmp, "UTF-8")
+        ; Only ever run a real Performance Companion script of the expected version.
+        if !(InStr(head, "#Requires AutoHotkey v2") && InStr(head, 'SCRIPT_VERSION := "' updateInfo.version '"')
+            && InStr(head, 'APP_NAME       := "Performance Companion"'))
+            throw Error("the download doesn't look like Performance Companion " updateInfo.version)
+    } catch as e {
+        Log("UPDATE      download failed: " e.Message)
+        if !silent
+            MsgBox("The update couldn't be downloaded (" e.Message ").`nYou can get it from:`n" REPO_URL "/releases/latest",
+                "Performance Companion", "Icon!")
+        return
+    }
+    Log("UPDATE      installing " updateInfo.version (silent ? " automatically" : ""))
+    ShowOSD("Installing Performance Companion " updateInfo.version "...", "Green", true)
+    Run('"' A_AhkPath '" "' tmp '"')        ; installs itself and replaces this copy
+}
+
+; Hourly timer; checks when the last check is a day old.
+DailyUpdateCheck() {
+    last := IniRead(STATE, "app", "update_checked", "")
+    if (last = "" || DateDiff(A_Now, last, "Hours") >= 24)
+        CheckForUpdates()
 }
 ; ====================================================================
 ;  EMBEDDED ICONS (written to the install folder once per version)
