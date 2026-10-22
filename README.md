@@ -91,7 +91,7 @@ Schedules never surprise you. Before any restart or shutdown you get a heads-up 
 ## Install
 
 1. Install AutoHotkey v2 (and G-Helper, if you use it).
-2. Download `PerformanceCompanion.ahk` from the [latest release](https://github.com/zonearc/PerformanceCompanion/releases/latest), put it anywhere, and double-click it.
+2. Download `PerformanceCompanion-x.y.z.ahk` (the version number is in the name) from the [latest release](https://github.com/zonearc/PerformanceCompanion/releases/latest), put it anywhere, and double-click it.
 3. Approve the one administrator prompt.
 
 Performance Companion copies itself into place, starts with Windows, adds a Start menu shortcut, picks its engine and starting profile, and shows a short welcome with any one-time setup for your machine. After that, no popups.
