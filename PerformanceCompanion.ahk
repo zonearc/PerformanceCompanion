@@ -30,7 +30,7 @@ SetTitleMatchMode 2
 ;  Replaces G14 Control, Laptop Control and Clutch: settings carry over.
 ; ====================================================================
 
-global SCRIPT_VERSION := "3.0.5"      ; bump on every release so updates announce themselves
+global SCRIPT_VERSION := "3.0.6"      ; bump on every release so updates announce themselves
 global APP_NAME       := "Performance Companion"
 global REPO_URL       := "https://github.com/zonearc/PerformanceCompanion"
 
@@ -220,6 +220,7 @@ global planRetryAt    := 0
 global appliedMode    := ""         ; mode Performance Companion applied last (plans backend)
 global customModes    := Map()      ; G-Helper custom modes: id -> name
 global BALANCED_GUID  := "381b4222-f694-41f0-9685-ff5bb260df2e"   ; Windows Balanced plan, the template
+global batteryAsk     := Map()      ; game exe -> "yes" / "no" / "pending" (ask on battery)
 global updateInfo     := ""         ; {version, url, notes} when a newer release exists on GitHub
 global switching      := false      ; a profile switch is in progress
 global schedules      := Map()      ; id -> schedule object (see SCHEDULES section)
@@ -814,7 +815,7 @@ NewProfileObj(name, icon, gpu, charge, battery, ac, games, cap, after) {
 
 ProfileIcons()  => ["everyday", "desk", "travel", "custom"]
 ProfileGpus()   => ["auto", "ultimate", "standard", "eco"]
-ProfileGames()  => ["off", "ac", "always"]
+ProfileGames()  => ["off", "ac", "ask", "always"]
 ProfileCaps()   => ["none", "balanced", "silent"]
 ProfileAfters() => ["auto", "shutdown"]
 
@@ -972,7 +973,7 @@ GpuLabelLong(g) => g = "ultimate" ? "Ultimate (NVIDIA straight to the screen, fa
     : g = "standard" ? "Standard (both GPUs, always)"
     : g = "eco" ? "Eco (NVIDIA off, longest battery)"
     : "Optimized (Eco on battery, Standard plugged in)"
-GamesLabel(w) => w = "off" ? "off" : w = "always" ? "always, including battery" : "when plugged in"
+GamesLabel(w) => w = "off" ? "off" : w = "always" ? "always, including battery" : w = "ask" ? "when plugged in, asks on battery" : "when plugged in"
 ProfileSummary(p) {
     if HasGH()
         return GpuLabel(p.gpu) ", " p.charge "%"
@@ -983,7 +984,7 @@ MenuText(s) => StrReplace(s, "&", "&&")
 ; Whether game modes may act right now in the active profile.
 GameModesActive() {
     w := CurP().games
-    return (w = "always") || (w = "ac" && OnAC())
+    return (w = "always" || w = "ask") || (w = "ac" && OnAC())
 }
 
 ; Silent < Balanced < Turbo (custom modes count as Turbo-class).
@@ -1435,7 +1436,7 @@ ShowProfiles(*) {
     iconNames := ["Blue laptop", "Red lightning bolt", "Teal battery", "Purple star"]
     gpuNames := ["Optimized: Eco on battery, Standard plugged in", "Ultimate: NVIDIA straight to the screen (fastest)",
                  "Standard: both GPUs, always", "Eco: NVIDIA off, always (longest battery)"]
-    gamesNames := ["Off", "When plugged in", "Always, including battery"]
+    gamesNames := ["Off", "When plugged in", "Plugged in; ask me on battery", "Always, including battery"]
     capNames := ["No limit (each app's own mode)", ModeName(0) " at most", ModeName(2) " for everything"]
     lvlIds := [1, 0, 2], lvlNames := [ModeName(1), ModeName(0), ModeName(2)]
     gh := HasGH()
@@ -1517,6 +1518,7 @@ ShowProfiles(*) {
     tipGames := "When games and listed apps get their own mode (" ModeName(DEFAULT_GAME_MODE) " by default, or whatever you set per app).`n"
         . "Off: everything runs in the 'no game' mode above.`n"
         . "When plugged in: the usual choice.`n"
+        . "Ask me on battery: plugged in it's automatic; on battery you get a quick prompt first.`n"
         . "Always: also on battery (" ModeName(1) " drains it fast)."
     Lbl("Game modes", tipGames)
     gamesDdl := g.Add("DropDownList", "x+4 yp-3 w300", gamesNames)
@@ -3246,7 +3248,7 @@ ExpectedPerf() {
     if (manualOverride = "Balanced")
         return 0
     if (isTurboMode && GameModesActive())
-        return CapMode(turboMode, p)
+        return GameModeNow()
     return OnAC() ? p.ac : p.battery
 }
 
@@ -3604,7 +3606,7 @@ SmartPlatformMonitor() {
             heldCount := 0
             if (GameModeFor(turboExe) != turboMode) {
                 turboMode := GameModeFor(turboExe)
-                SetPerfMode(CapMode(turboMode), "game " turboExe)
+                SetPerfMode(GameModeNow(), "game " turboExe)
                 ShowOSD(turboExe ": " ModeShown(turboMode) " (saved)", turboMode = 1 ? "Red" : "Blue")
             }
         }
@@ -3639,7 +3641,8 @@ EngageTurbo(source, path, util := "") {
     turboSource := source
     turboMode := GameModeFor(turboExe)
     isTurboMode := true
-    SetPerfMode(CapMode(turboMode), "game " turboExe)
+    AskOnBattery(turboExe)
+    SetPerfMode(GameModeNow(), "game " turboExe)
     NoteSeen(turboExe, source = "load" ? "GPU load" : knownHow)
     saved := gameModes.Has(turboExe) ? " (saved)" : ""
     if (source = "game") {
@@ -3686,7 +3689,7 @@ ApplyModeTo(exe, path, mode, *) {
     }
     if (isTurboMode && exe = turboExe) {
         turboMode := GameModeFor(exe)
-        SetPerfMode(CapMode(turboMode), "game " turboExe)
+        SetPerfMode(GameModeNow(), "game " turboExe)
     } else if (path != "" && GameModesActive() && manualOverride = "None") {
         knownHow := addedGames.Has(exe) ? "added by you" : "saved mode"
         EngageTurbo("game", path)
@@ -4175,7 +4178,7 @@ ShowGames(*) {
         SetGameMode(exe, mode)
         if (isTurboMode && exe = turboExe) {          ; it's running: apply now
             turboMode := GameModeFor(exe)
-            SetPerfMode(CapMode(turboMode), "game " turboExe)
+            SetPerfMode(GameModeNow(), "game " turboExe)
         }
         Fill()
     }
@@ -4321,7 +4324,59 @@ CheckPassiveGamingState() {
 
 ; The no-game mode for the active profile and power source.
 IdleMode() => OnAC() ? CurP().ac : CurP().battery
-RestoreIdleMode() => SetPerfMode(IdleMode(), "no game")
+RestoreIdleMode() {
+    batteryAsk.Clear()                     ; the next game on battery asks again
+    SetPerfMode(IdleMode(), "no game")
+}
+
+; ---------- "ask me on battery" ----------
+; In a profile set to ask, a game that starts on battery gets a small
+; prompt. Until you say yes it stays in the battery mode; no answer in
+; 20 seconds means stay.
+GameAllowedNow(exe) {
+    if (CurP().games != "ask" || OnAC())
+        return true
+    return batteryAsk.Has(exe) && batteryAsk[exe] = "yes"
+}
+
+; The mode a running game should get right now (cap, battery answer included).
+GameModeNow() => GameAllowedNow(turboExe) ? CapMode(turboMode) : IdleMode()
+
+AskOnBattery(exe) {
+    static g := 0
+    if (CurP().games != "ask" || OnAC() || batteryAsk.Has(exe))
+        return
+    batteryAsk[exe] := "pending"
+    if g
+        try g.Destroy()
+    g := Gui("+AlwaysOnTop -MinimizeBox +ToolWindow", "Performance Companion")
+    g.SetFont("s10", "Segoe UI")
+    g.MarginX := 16, g.MarginY := 12
+    g.Add("Text", "w360", exe " started while you're on battery.`n"
+        . "Use " ModeName(CapMode(turboMode)) "? It drains the battery faster.")
+    yes := g.Add("Button", "w170 y+12", "Yes, full power")
+    no := g.Add("Button", "x+8 w170 Default", "No, save battery")
+    yes.OnEvent("Click", (*) => Answer("yes"))
+    no.OnEvent("Click", (*) => Answer("no"))
+    g.OnEvent("Close", (*) => Answer("no"))
+    g.Show("NoActivate")
+    Log("GAME ASK    " exe " started on battery; asking before full power")
+    SetTimer(TimeOut, -20000)
+
+    TimeOut() {
+        if (batteryAsk.Has(exe) && batteryAsk[exe] = "pending")
+            Answer("no")
+    }
+    Answer(a) {
+        batteryAsk[exe] := a
+        try g.Destroy()
+        g := 0
+        Log("GAME ASK    " exe ": " (a = "yes" ? "full power on battery" : "stay in battery mode"))
+        if (isTurboMode && turboExe = exe)
+            SetPerfMode(GameModeNow(), "battery answer")
+        ShowOSD(exe ": " (a = "yes" ? ModeName(CapMode(turboMode)) " on battery" : "staying in " ModeName(IdleMode())), a = "yes" ? "Red" : "Blue", true)
+    }
+}
 
 ; A game's mode as it will actually run, noting a profile limit if one applies.
 ModeShown(m) => (CapMode(m) != m) ? ModeName(CapMode(m)) " (" CurP().name " limit)" : ModeName(m)

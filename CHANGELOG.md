@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.0.6 (October 2026)
+
+- **Ask me on battery:** a new Game modes choice in Profiles. Plugged in, games get full power automatically. On battery, a small prompt asks first ("Yes, full power" / "No, save battery"); no answer in 20 seconds means save battery. It asks once per game session.
+
 ## 3.0.5 (October 2026)
 
 - **Clearer wording throughout:**

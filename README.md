@@ -60,6 +60,7 @@ Switch from the tray icon, the Start menu ("Performance Companion profiles"), or
 - **Learns as you play.** A new game that holds real load for 30 seconds is remembered for next time.
 - **Any app you add counts too.** DAWs, video editors, renderers, local AI tools: add the .exe in **Apps and games** and it gets its mode the moment it opens.
 - **Per-app modes.** Not everything needs full power. Pick a mode per game or app from the tray, or press **Ctrl+Alt+G** in-game to cycle it. With G-Helper, your own custom modes (like a quiet mode with full power for music work) are listed by the names you gave them.
+- **Battery-aware.** By default games only get full power when you're plugged in. Want a choice on battery? Set a profile's Game modes to **Plugged in; ask me on battery** and you get a quick prompt instead.
 - **Ignores launchers and stores** like Steam, Battle.net, the EA app and the League client.
 - **No games are built in.** Your list is built from what you use.
 
