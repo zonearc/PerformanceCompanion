@@ -109,15 +109,20 @@ Updating by hand works too: download the new version and double-click it. No adm
 ```
 Game: eldenring.exe (Turbo)          >  Turbo / Balanced / Silent / your custom modes / Default / Ignore
       Ctrl+Alt+G cycles this in-game
-Profile: Gaming (Ultimate, 80%)
-Switch to Work (...)
-Switch to Travel (...)
+---------------------------------------
+Switch profile
+  ✓ Gaming   (Ultimate, 80%)
+    Work     (Optimized, 80%, restart)
+    Travel   (Optimized, 100%, shut down)
+---------------------------------------
 Profiles...
 Schedules...   (next: Fri 19:00 Gaming)
 Apps and games...
 Settings...
+---------------------------------------
 Report an issue...
 Help and troubleshooting...
+---------------------------------------
 Exit
 ```
 

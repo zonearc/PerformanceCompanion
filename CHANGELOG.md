@@ -3,6 +3,7 @@
 ## 3.0.4 (October 2026)
 
 - **Simpler to use:**
+  - The tray menu is grouped at a glance: what's running now, your profiles (the active one ticked, click another to switch), setup, then help.
   - The tray menu ends with **Report an issue** and **Help and troubleshooting**. Diagnostics, logs, pause, reset and uninstall now live in one window.
   - **Settings** and **Profiles** start simple, with a **Show advanced** option for the rest.
   - **Reset everything** puts settings, profiles and power plans back to the defaults, with the option to keep your games.

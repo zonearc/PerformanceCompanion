@@ -4375,38 +4375,45 @@ BuildMenu() {
     m.Disable(tip)
     m.Add()
 
-    ; --- profiles ---
+    ; --- profile switcher: the active one is ticked, click another to switch ---
     p := CurP()
-    head := MenuText("Profile: " p.name " (" ProfileSummary(p) ")")
-    m.Add(head, (*) => 0)
-    m.Disable(head)
+    title := "Switch profile"
+    m.Add(title, (*) => 0)
+    m.Disable(title)
+    target := m
+    if (profileOrder.Length > 6) {
+        target := Menu()
+        m.Add(MenuText(p.name " (active)"), target)
+    }
+    for id in profileOrder {
+        q := profiles[id]
+        if (id = profile) {
+            lbl := MenuText(q.name "   (" ProfileSummary(q) ")")
+            target.Add(lbl, (*) => ShowOSD(CurP().name " is already active", "Blue", true))
+            target.Check(lbl)
+        } else {
+            plan := SwitchPlan(id)
+            target.Add(MenuText(q.name "   (" ProfileSummary(q) (plan.ending != "none" ? ", " EndingWord(plan.ending) : "") ")"),
+                SwitchToProfile.Bind(id, "manual"))
+        }
+    }
     if ProfileMismatch() {
         fin := MenuText("Finish switching to " p.name " (" (p.gpu = "ultimate" ? "Ultimate, " : "leave Ultimate, ")
             . (p.gpu != "ultimate" && p.after = "shutdown" ? "shut down" : "restart") ")")
         m.Add(fin, FinishSwitch)
         m.Default := fin
     }
-    others := []
-    for id in profileOrder
-        if (id != profile)
-            others.Push(id)
-    if (others.Length <= 5) {
-        for id in others
-            m.Add(SwitchMenuLabel(id), SwitchToProfile.Bind(id, "manual"))
-    } else {
-        sw := Menu()
-        for id in others
-            sw.Add(SwitchMenuLabel(id), SwitchToProfile.Bind(id, "manual"))
-        m.Add("Switch to", sw)
-    }
+    m.Add()
+
+    ; --- set things up ---
     m.Add("Profiles...", ShowProfiles)
     nx := NextScheduleText()
     m.Add("Schedules..." (nx != "" ? "   (" nx ")" : SCHEDULES_ENABLED ? "" : "   (off)"), ShowSchedules)
-    m.Add()
     m.Add("Apps and games...", ShowGames)
     m.Add("Settings...", ShowSettings)
-
     m.Add()
+
+    ; --- help ---
     m.Add("Report an issue...", ReportIssue)
     m.Add("Help and troubleshooting...", ShowHelp)
     m.Add()
