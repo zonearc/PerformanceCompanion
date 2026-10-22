@@ -30,7 +30,7 @@ SetTitleMatchMode 2
 ;  Replaces G14 Control, Laptop Control and Clutch: settings carry over.
 ; ====================================================================
 
-global SCRIPT_VERSION := "3.0.4"      ; bump on every release so updates announce themselves
+global SCRIPT_VERSION := "3.0.5"      ; bump on every release so updates announce themselves
 global APP_NAME       := "Performance Companion"
 global REPO_URL       := "https://github.com/zonearc/PerformanceCompanion"
 
@@ -624,7 +624,7 @@ ShowSettings(*) {
     unDdl.Choose(IndexOf(unIds, BATTERY_PROFILE))
     Row("Default mode for games", "Mode for games and apps you haven't set a mode for.`n"
         . "Per-app choices (tray menu, Ctrl+Alt+G, Apps and games) always win.`n"
-        . "A profile can still limit it (Profiles > Game mode limit).")
+        . "A profile can still cap it (Profiles > Show advanced > Max power for games).")
     names := []
     for m in modeIds
         names.Push(ModeName(m))
@@ -634,7 +634,7 @@ ShowSettings(*) {
     learnCb.Value := LEARNING_ENABLED
     AddTip(learnCb, "When an unlisted app holds heavy GPU load in game mode for " LearnCycles * 5 " seconds,`n"
         . "remember it as a game so it's recognized instantly next time.")
-    schCb := g.Add("Checkbox", "xm+12 y+8", "Run my schedules (Tray > Schedules)")
+    schCb := g.Add("Checkbox", "xm+12 y+8", "Schedules on (Tray > Schedules)")
     schCb.Value := SCHEDULES_ENABLED
     AddTip(schCb, "Master switch for timed profile switches" (HasGH() ? " and trip charging" : "") ".`n"
         . "Off until you turn it on. Each schedule also has its own on/off.")
@@ -650,8 +650,8 @@ ShowSettings(*) {
     updDdl.Choose(IndexOf(updIds, UPDATE_MODE))
 
     if adv {
-        Section("Engine")
-        Row("How modes are applied", "Automatic: G-Helper on ASUS machines that run it, Windows power plans everywhere else.`n"
+        Section("Works with")
+        Row("Change modes through", "Automatic: G-Helper on ASUS machines that run it, Windows power plans everywhere else.`n"
             . "G-Helper: GPU modes, charge limits, Turbo / Balanced / Silent and your custom modes.`n"
             . "Windows power plans: works on any laptop or handheld; your maker's app sets the ceiling.`n"
             . "Changing this reloads Performance Companion.")
@@ -882,6 +882,11 @@ LoadProfiles() {
         }
         IniWrite(1, STATE, "app", "names_v2")
     }
+    ; 3.0.5: "Battery Saver" clashed with Windows' own Battery saver.
+    if (profiles.Has("travel") && profiles["travel"].name = "Battery Saver") {
+        profiles["travel"].name := "Long Battery"
+        IniWrite("Long Battery", STATE, "profile.travel", "name")
+    }
     profile := IniRead(STATE, "app", "profile", "")
     if (profile = "desk")                      ; 1.x names, in case migration was skipped
         profile := "gaming"
@@ -899,12 +904,12 @@ CreateDefaultProfiles() {
         ; Windows power plans: no GPU or charge settings, instant switches.
         ;   Work            Work plugged in, Eco on battery, game modes plugged in
         ;   Gaming          Performance plugged in, Work on battery, game modes always
-        ;   Battery Saver   Eco everywhere, game modes off
+        ;   Long Battery    Eco everywhere, game modes off
         wk := NewProfileObj("Work", "everyday", "auto", 80, 2, 0, "ac", "none", "auto")
         wk.id := "everyday"
         gm := NewProfileObj("Gaming", "desk", "auto", 80, 0, 1, "always", "none", "auto")
         gm.id := "gaming"
-        bs := NewProfileObj("Battery Saver", "travel", "auto", 100, 2, 2, "off", "none", "auto")
+        bs := NewProfileObj("Long Battery", "travel", "auto", 100, 2, 2, "off", "none", "auto")
         bs.id := "travel"
         for p in [wk, gm, bs]
             WriteProfile(p)
@@ -1499,13 +1504,13 @@ ShowProfiles(*) {
     }
 
     tipBat := "Mode on battery when no game or listed app is running.`n" ModeName(2) " stretches the battery furthest; " ModeName(0) " feels snappier."
-    Lbl("On battery, no game", tipBat)
+    Lbl("On battery", tipBat)
     batDdl := g.Add("DropDownList", "x+4 yp-3 w150", lvlNames)
     AddTip(batDdl, tipBat), batDdl.OnEvent("Change", Changed)
 
     tipAc := "Mode plugged in when no game or listed app is running.`n" ModeName(0) " is the usual choice; " ModeName(2) " keeps the fans down for calls or late nights;`n"
         . ModeName(1) " keeps everything at full speed all the time."
-    Lbl("Plugged in, no game", tipAc)
+    Lbl("Plugged in", tipAc)
     acDdl := g.Add("DropDownList", "x+4 yp-3 w150", lvlNames)
     AddTip(acDdl, tipAc), acDdl.OnEvent("Change", Changed)
 
@@ -1520,7 +1525,7 @@ ShowProfiles(*) {
     tipCap := "Upper limit on game modes in this profile, whatever each game asks for.`n"
         . "Example: a hotel-room or late-night profile that never goes louder than " ModeName(0) "."
     if adv {
-        Lbl("Game mode limit", tipCap)
+        Lbl("Max power for games", tipCap)
         capDdl := g.Add("DropDownList", "x+4 yp-3 w300", capNames)
         AddTip(capDdl, tipCap), capDdl.OnEvent("Change", Changed)
     }
@@ -1581,7 +1586,7 @@ ShowProfiles(*) {
         AddTip(b, "Move down in the tray menu.")
         b := g.Add("Button", "x+4 w130", "Restore defaults")
         b.OnEvent("Click", (*) => RestoreDefaults())
-        AddTip(b, "Replace all profiles with the three defaults (" (gh ? "Work, Gaming, Travel" : "Work, Gaming, Battery Saver") ").`n"
+        AddTip(b, "Replace all profiles with the three defaults (" (gh ? "Work, Gaming, Travel" : "Work, Gaming, Long Battery") ").`n"
             . "Your games, settings and schedules stay; schedules that used a removed profile are turned off.")
     }
     b := g.Add("Button", "x+18 w100", "Switch to it")
@@ -1871,7 +1876,7 @@ ShowProfiles(*) {
 ;    last_start, last_end, last_charge: timestamps already handled
 ;
 ;  Rules: restarts and shutdowns are warned WARN_MINUTES and 2 minutes
-;  ahead (Postpone / Skip / Do it now), never happen while a game is
+;  ahead (Snooze / Skip / Switch now), never happen while a game is
 ;  running, and a switch missed while the laptop was off is offered as a
 ;  catch-up instead of happening by surprise. Trips raise the charge limit
 ;  early enough to be full at departure.
@@ -2222,7 +2227,7 @@ SchedCountdown() {
         return
     }
 
-    ; Due. Never in the middle of a game, unless you pressed Do it now.
+    ; Due. Never in the middle of a game, unless you pressed Switch now.
     if (!sp.force && GameActive()) {
         if !sp.waitingGame
             Log("SCHEDULE    " s.name ": game running, waiting for it to finish")
@@ -2308,12 +2313,12 @@ ShowWarning(sp) {
     g.Add("Text", "w500 y+8", "Tip: Windows can reopen your apps after a restart: Settings > Accounts > Sign-in options > "
         . "'Automatically save my restartable apps'. Games are never interrupted; the switch waits for them.")
     g.SetFont("s10 norm cDefault")
-    b1 := g.Add("Button", "w110 y+14", "Do it now")
-    b2 := g.Add("Button", "x+8 w130", "Postpone 30 min")
-    b3 := g.Add("Button", "x+8 w120", "Skip this time")
+    b1 := g.Add("Button", "w110 y+14", "Switch now")
+    b2 := g.Add("Button", "x+8 w130", "Snooze 30 min")
+    b3 := g.Add("Button", "x+8 w90", "Skip")
     AddTip(b1, "Switch right away.")
     AddTip(b2, "Ask again in 30 minutes.")
-    AddTip(b3, "Don't switch this time. The schedule runs again next time as usual.")
+    AddTip(b3, "Don't switch this time. Repeating schedules run again next time as usual.")
     b1.OnEvent("Click", (*) => Act("now"))
     b2.OnEvent("Click", (*) => Act("postpone"))
     b3.OnEvent("Click", (*) => Act("skip"))
@@ -2333,9 +2338,9 @@ ShowWarning(sp) {
                 SchedCountdown()
             case "postpone":
                 schedPending.due := DateAdd(A_Now, 30, "Minutes"), schedPending.warned2 := false, schedPending.hidden := false
-                Log("SCHEDULE    " s.name ": postponed to " FormatTime(schedPending.due, "HH:mm"))
+                Log("SCHEDULE    " s.name ": snoozed until " FormatTime(schedPending.due, "HH:mm"))
                 CloseWarning()
-                ShowOSD(s.name ": postponed to " FormatTime(schedPending.due, "HH:mm"), "Blue", true)
+                ShowOSD(s.name ": snoozed until " FormatTime(schedPending.due, "HH:mm"), "Blue", true)
             case "skip":
                 MarkDone(s, schedPending.kind, schedPending.occ, s.name ": skipped this time")
                 CancelPending("skipped")
@@ -2550,11 +2555,11 @@ ShowSchedules(*) {
         ideas := "Going on a trip? Tell it when you leave: it charges the battery to full in time and switches to Travel just before you go.`n" ideas
     g.Add("Text", "xm y+6 w760", ideas)
     g.SetFont("s9 cGray")
-    g.Add("Text", "xm y+6 w760", "You always get a heads-up before a restart or shutdown (with Postpone and Skip), switches wait while you're "
+    g.Add("Text", "xm y+6 w760", "You always get a heads-up before a restart or shutdown (with Snooze and Skip), switches wait while you're "
         . "in a game, and if the laptop was off at the time, you're asked whether to catch up.")
     g.SetFont("s10 norm cDefault")
 
-    master := g.Add("Checkbox", "xm y+12", "Run my schedules")
+    master := g.Add("Checkbox", "xm y+12", "Schedules on")
     master.Value := SCHEDULES_ENABLED
     g.SetFont("s10 bold")
     stateTx := g.Add("Text", "x+10 yp w300", "")
@@ -2635,7 +2640,7 @@ ShowSchedules(*) {
             CancelPending(s.name " turned off")
         Refresh()
         if (s.enabled && !SCHEDULES_ENABLED)
-            MsgBox(s.name " is on, but schedules as a whole are off. Tick 'Run my schedules' at the top to start them.",
+            MsgBox(s.name " is on, but schedules as a whole are off. Tick 'Schedules on' at the top to start them.",
                 "Performance Companion schedules", "Iconi Owner" g.Hwnd)
     }
 
@@ -2680,7 +2685,7 @@ FinishScheduleSave(s, isNew, onSave) {
         (ThenText(s) != "" ? ", " ThenText(s) : "") (s.enabled ? "" : " (off)"))
     try onSave()                                       ; the list window may have been closed meanwhile
     if (s.enabled && !SCHEDULES_ENABLED)
-        ShowOSD("Saved. Tick 'Run my schedules' to start it.", "Blue", true)
+        ShowOSD("Saved. Tick 'Schedules on' to start it.", "Blue", true)
     else
         SetTimer(ScheduleTick, -500)
 }
@@ -2744,7 +2749,7 @@ ShowScheduleEditor(id, onSave) {
 
     enCb := g.Add("Checkbox", "xm y+16", "This schedule is on")
     enCb.Value := s.enabled
-    AddTip(enCb, "Also needs 'Run my schedules' ticked in the Schedules window.")
+    AddTip(enCb, "Also needs 'Schedules on' ticked in the Schedules window.")
     b := g.Add("Button", "xm y+14 w90 Default", "Save")
     b.OnEvent("Click", (*) => Save())
     b := g.Add("Button", "x+8 w90", "Cancel")
@@ -3740,7 +3745,7 @@ SetIgnored(exe, on) {
             isTurboMode := false
             Log("GAME OFF    " exe " ignored")
         }
-        ShowOSD(exe ": ignored (not a game)", "Blue")
+        ShowOSD(exe ": marked as not a game", "Blue")
     } else if notGames.Has(exe) {
         notGames.Delete(exe)
         try IniDelete(STATE, "notgames", exe)
@@ -4053,7 +4058,7 @@ ShowGames(*) {
     g.Add("Text", "w" W, "Games Performance Companion detected, plus any app you added. Games are the main event, but any power-hungry app works "
         . "the same way: add FL Studio, Blender, Premiere or a local AI model and it gets its own mode while it runs. "
         . "Anything without a saved mode uses the default: " ModeName(DEFAULT_GAME_MODE) ".`n"
-        . "Ignore = launcher / not a game (never triggers). Remove = delete it from the list. Ctrl+Alt+G cycles the mode in-game.")
+        . "Not a game = a launcher or tool that should never trigger. Remove = delete it from the list. Ctrl+Alt+G cycles the mode in-game.")
     lv := g.Add("ListView", "w" W " r14 -Multi Sort", ["App or game", "Detected by", "Mode", "Last seen"])
     AddTip(lv, "Select an app or game, then use a button below.`n"
         . "Detected by: how Performance Companion recognizes it.`n"
@@ -4091,7 +4096,7 @@ ShowGames(*) {
     b.OnEvent("Click", (*) => SetSel(""))
     AddTip(b, "Clear this game's saved mode so it follows the default`n(currently " ModeName(DEFAULT_GAME_MODE) "). Also un-ignores it.")
 
-    b := g.Add("Button", "x+8 w80", "Ignore")
+    b := g.Add("Button", "x+8 w90", "Not a game")
     b.OnEvent("Click", (*) => IgnoreSel())
     AddTip(b, "This exe is a launcher or not a game.`nIt will never trigger a game mode again.`nPick any mode later to undo.")
 
@@ -4367,7 +4372,7 @@ BuildMenu() {
         if !gameModes.Has(t.exe)
             sub.Check("Default (" ModeName(DEFAULT_GAME_MODE) ")")
         sub.Add()
-        sub.Add("Ignore (launcher / not a game)", ApplyModeTo.Bind(t.exe, t.path, "ignore"))
+        sub.Add("Not a game", ApplyModeTo.Bind(t.exe, t.path, "ignore"))
         m.Add(label, sub)
     }
     tip := "      Ctrl+Alt+G cycles this in-game"
@@ -4559,14 +4564,14 @@ ShowHelp(*) {
     Btn("Open activity log", "One line per decision, with times.",
         (*) => FileExist(LOGFILE) ? Run('notepad.exe "' LOGFILE '"') : ShowOSD("No activity logged yet", "Blue", true))
     Btn("Copy diagnostics", "Copies the full report to paste anywhere yourself.", CopyDiagnostics)
-    wb := Btn(watchGpu ? "Stop watching GPU load" : "Watch GPU load", "A live panel showing which app loads the GPU and by how much.",
-        (*) => (ToggleWatch(), wb.Text := watchGpu ? "Stop watching GPU load" : "Watch GPU load"))
+    wb := Btn(watchGpu ? "Hide live GPU usage" : "Show live GPU usage", "A live panel showing which app loads the GPU and by how much.",
+        (*) => (ToggleWatch(), wb.Text := watchGpu ? "Hide live GPU usage" : "Show live GPU usage"))
     if HasGH()
         Btn("Run G-Helper self-test", "Re-checks that G-Helper responds as expected.", (*) => SelfTest(CurrentVersion()))
 
     Head("Fix things")
-    pb := Btn(paused ? "Resume automation" : "Pause automation", "Stops (or restarts) all automatic switching for now.",
-        (*) => (TogglePause(), pb.Text := paused ? "Resume automation" : "Pause automation"))
+    pb := Btn(paused ? "Resume" : "Pause", "Stops (or restarts) all automatic switching for now.",
+        (*) => (TogglePause(), pb.Text := paused ? "Resume" : "Pause"))
     Btn("Reload", "Restarts Performance Companion. Settings are kept.", (*) => Reload())
     Btn("Clear activity log", "Deletes the log. It also trims itself automatically.", ClearLog)
     Btn("Reset everything...", "Settings, profiles" (HasGH() ? "" : " and power plans") " back to the defaults.", (*) => ResetEverything())

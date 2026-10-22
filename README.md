@@ -49,7 +49,7 @@ A profile bundles everything you'd otherwise change by hand: the mode plugged in
 |---|---|---|---|
 | **Work** | Work | Eco | Own mode when plugged in |
 | **Gaming** | Performance | Work | Own mode always |
-| **Battery Saver** | Eco | Eco | Off |
+| **Long Battery** | Eco | Eco | Off |
 
 Switch from the tray icon, the Start menu ("Performance Companion profiles"), or **Ctrl+Win+Alt+T** for a profile picker. Settings can also switch profiles automatically when you unplug and back when you plug in.
 
@@ -71,7 +71,7 @@ Tray > **Schedules** works like a calendar app. A schedule happens once or repea
 - **Quiet evenings?** Switch to a quiet profile every night at 10 pm.
 - **Going on a trip?** (G-Helper) **Plan a trip** with the time you leave. It charges the battery to full just in time, reminds you to plug in, and switches to Travel right before you go.
 
-Schedules never surprise you. Before any restart or shutdown you get a heads-up 10 minutes and 2 minutes ahead with **Postpone**, **Skip** and **Do it now**. Switches wait while you're in a game, and if the machine was off at the scheduled time, you're asked whether to catch up.
+Schedules never surprise you. Before any restart or shutdown you get a heads-up 10 minutes and 2 minutes ahead with **Snooze**, **Skip** and **Switch now**. Switches wait while you're in a game, and if the machine was off at the scheduled time, you're asked whether to catch up.
 
 ### Always clear about what it's doing
 
@@ -107,7 +107,7 @@ Updating by hand works too: download the new version and double-click it. No adm
 ## The tray menu
 
 ```
-Game: eldenring.exe (Turbo)          >  Turbo / Balanced / Silent / your custom modes / Default / Ignore
+Game: eldenring.exe (Turbo)          >  Turbo / Balanced / Silent / your custom modes / Default / Not a game
       Ctrl+Alt+G cycles this in-game
 ---------------------------------------
 Switch profile
@@ -140,7 +140,7 @@ Mode names follow the engine: Turbo / Balanced / Silent with G-Helper, Performan
 | Set up timed switches or a trip | Tray > **Schedules** |
 | Force the high / middle mode for a while | **Ctrl+Alt+T** / **Ctrl+Alt+B** (releases after 3 hours or a power change) |
 | Auto-switch on unplug, updates | Tray > **Settings** |
-| Switch engine | Tray > Settings > Show advanced |
+| Switch between G-Helper and power plans | Tray > Settings > Show advanced > **Works with** |
 | Start over | Help and troubleshooting > **Reset everything** |
 | See what's happening | Hover the tray icon, or Help and troubleshooting > **Status** |
 
@@ -165,10 +165,10 @@ Tray > Help and troubleshooting > **Uninstall**. It removes the startup tasks an
 | Nothing happens at all | Help and troubleshooting > **Setup check**. With G-Helper, it's usually G-Helper not running. |
 | Performance mode doesn't feel faster | Set your maker's app to its highest mode while plugged in (Setup check shows how for your brand). |
 | The power plan keeps flipping | A maker's app or Handheld Companion is changing it. Turn off its automatic power mode, or its power mode / EPP overrides. |
-| A game or app doesn't trigger | Add it in **Apps and games**, or use Help and troubleshooting > **Watch GPU load**. Check the profile's **Game modes** setting too. |
-| Something that isn't a game triggers | Tray menu, top line > **Ignore**. |
-| A schedule didn't run | Make sure **Run my schedules** is ticked in the Schedules window, and check the date. |
-| Wrong engine picked | Tray > Settings > Show advanced > **Engine**. |
+| A game or app doesn't trigger | Add it in **Apps and games**, or use Help and troubleshooting > **Show live GPU usage**. Check the profile's **Game modes** setting too. |
+| Something that isn't a game triggers | Tray menu, top line > **Not a game**. |
+| A schedule didn't run | Make sure **Schedules on** is ticked in the Schedules window, and check the date. |
+| Wrong engine picked | Tray > Settings > Show advanced > **Works with**. |
 
 ## License
 

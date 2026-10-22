@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.0.5 (October 2026)
+
+- **Clearer wording throughout:**
+  - Schedule warnings say **Snooze 30 min**, **Skip** and **Switch now**.
+  - **Not a game** replaces Ignore.
+  - **Max power for games** replaces Game mode limit.
+  - Profiles show **Plugged in** and **On battery**.
+  - **Works with** replaces Engine.
+  - The help window has **Pause / Resume** and **Show live GPU usage**.
+  - The schedules switch is **Schedules on**.
+- **Long Battery** replaces Battery Saver on the power plans engine (it clashed with Windows' own Battery saver). Existing profiles are renamed automatically.
+
 ## 3.0.4 (October 2026)
 
 - **Simpler to use:**
