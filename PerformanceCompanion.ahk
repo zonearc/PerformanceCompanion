@@ -30,7 +30,7 @@ SetTitleMatchMode 2
 ;  Replaces G14 Control, Laptop Control and Clutch: settings carry over.
 ; ====================================================================
 
-global SCRIPT_VERSION := "3.0.2"      ; bump on every release so updates announce themselves
+global SCRIPT_VERSION := "3.0.3"      ; bump on every release so updates announce themselves
 global APP_NAME       := "Performance Companion"
 global REPO_URL       := "https://github.com/zonearc/PerformanceCompanion"
 
@@ -4609,7 +4609,11 @@ ReportIssue(*) {
         ; Browsers and GitHub cap link length; long reports go via the clipboard.
         inline := UrlEncode(rep)
         pasted := (StrLen(url) + StrLen(inline) < 7500)
-        url .= "&diagnostics=" (pasted ? inline : UrlEncode("Press Ctrl+V here: Performance Companion copied the full diagnostics to your clipboard."))
+        ; Only pre-fill the box when the whole report fits. A pre-filled box
+        ; that's later pasted over gets reset by GitHub's form, so long
+        ; reports leave it empty for a clean Ctrl+V.
+        if pasted
+            url .= "&diagnostics=" inline
         Log("REPORT      opened a pre-filled bug report" (pasted ? "" : " (diagnostics on clipboard)"))
         try {
             Run(url)

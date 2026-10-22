@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.0.3 (October 2026)
+
+- **Report an issue:** long diagnostics now paste cleanly into the bug form (the form was resetting a pre-filled box after pasting).
+
 ## 3.0.2 (October 2026)
 
 - **Report an issue** (Troubleshooting): opens a pre-filled bug report on GitHub with your device and diagnostics, so problems get to us with everything needed to fix them.
