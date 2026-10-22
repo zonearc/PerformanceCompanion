@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: How to install, update and use it
+    url: https://github.com/zonearc/PerformanceCompanion#readme
+    about: Most questions are answered in the README.

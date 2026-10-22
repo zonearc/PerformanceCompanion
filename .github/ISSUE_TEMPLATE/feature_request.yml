@@ -1,0 +1,20 @@
+name: Idea or request
+description: Suggest a feature, a new device or app to support, or an improvement
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like it to do?
+      placeholder: "Let me give FL Studio its own custom G-Helper mode."
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why would it help?
+      description: The situation you're in today and what's annoying about it.
+  - type: input
+    id: device
+    attributes:
+      label: Your laptop or handheld (optional)

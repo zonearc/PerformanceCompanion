@@ -1,0 +1,37 @@
+name: Something isn't working
+description: Report a bug or something that doesn't behave as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. The diagnostics below answer most of the questions we'd otherwise have to ask, so please include them.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+      placeholder: "I switched to Gaming and the laptop restarted, but G-Helper still shows Standard."
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Laptop or handheld model
+      placeholder: "ASUS ROG Zephyrus G14 GA403, Legion Go, Razer Blade 15..."
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: |
+        Right-click the Performance Companion tray icon > Troubleshooting > **Copy diagnostics**, then paste here. Your username and PC name are already hidden.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Screenshots, steps to reproduce, or when it started.
