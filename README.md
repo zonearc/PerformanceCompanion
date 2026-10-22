@@ -65,11 +65,13 @@ Switch from the tray icon, the Start menu ("Performance Companion profiles"), or
 
 ### Schedules (optional, off until you turn them on)
 
-- **Recurring switches**, like Gaming every Friday at 7 pm and back to Work at 11:30.
-- **One-time switches** at a date and time.
-- **Trips (G-Helper):** tell it when you leave. It raises the charge limit early enough to be full at departure, reminds you to plug in, and can switch to Travel just before you go.
+Tray > **Schedules** works like a calendar app. A schedule happens once or repeats (every day, every weekday, every week, every 2 weeks, or monthly), switches to a profile, and can switch back later.
 
-Schedules never surprise you. Before any restart or shutdown you get a warning 10 minutes and 2 minutes ahead with **Postpone**, **Skip** and **Do it now**. Switches wait while a game is running, and if the machine was off at the scheduled time, Performance Companion asks before catching up.
+- **Weekly game night?** Switch to Gaming every Friday at 7 pm and back to Work at 11:30.
+- **Quiet evenings?** Switch to a quiet profile every night at 10 pm.
+- **Going on a trip?** (G-Helper) **Plan a trip** with the time you leave. It charges the battery to full just in time, reminds you to plug in, and switches to Travel right before you go.
+
+Schedules never surprise you. Before any restart or shutdown you get a heads-up 10 minutes and 2 minutes ahead with **Postpone**, **Skip** and **Do it now**. Switches wait while you're in a game, and if the machine was off at the scheduled time, you're asked whether to catch up.
 
 ### Always clear about what it's doing
 
@@ -111,17 +113,15 @@ Profile: Gaming (Ultimate, 80%)
 Switch to Work (...)
 Switch to Travel (...)
 Profiles...
-Power plans...                          (power plans engine only)
 Schedules...   (next: Fri 19:00 Gaming)
 Apps and games...
 Settings...
-Troubleshooting                      >  Status, Report an issue, Check for updates, Copy diagnostics,
-                                        activity log, GPU watch,
-                                        setup check, pause, reload, uninstall
+Report an issue...
+Help and troubleshooting...
 Exit
 ```
 
-Mode names follow the engine: Turbo / Balanced / Silent with G-Helper, Performance / Work / Eco with power plans.
+Mode names follow the engine: Turbo / Balanced / Silent with G-Helper, Performance / Work / Eco with power plans. **Settings** and **Profiles** start simple; tick **Show advanced** in either for the rest (engine, detection thresholds, power plan tuning, tray icons, apps to open or close, and more). **Help and troubleshooting** holds status, setup check, logs, diagnostics, pause, reset and uninstall.
 
 ## Everyday use
 
@@ -129,13 +129,15 @@ Mode names follow the engine: Turbo / Balanced / Silent with G-Helper, Performan
 |---|---|
 | Switch profiles | Tray menu, Start menu "Performance Companion profiles", or **Ctrl+Win+Alt+T** |
 | Change what a profile does, or add one | Tray > **Profiles** |
-| Tune what each mode does (power plans) | Tray > **Power plans** |
+| Tune what each mode does (power plans) | Tray > Settings > Show advanced > **Edit power plans** |
 | Give an app or game its own mode | Tray > **Apps and games** > Add app or game |
 | Change the current game's mode | Tray menu, top line, or **Ctrl+Alt+G** in-game |
 | Set up timed switches or a trip | Tray > **Schedules** |
 | Force the high / middle mode for a while | **Ctrl+Alt+T** / **Ctrl+Alt+B** (releases after 3 hours or a power change) |
-| Switch engine, or auto-switch on unplug | Tray > **Settings** |
-| See what's happening | Hover the tray icon, or Troubleshooting > **Status** |
+| Auto-switch on unplug, updates | Tray > **Settings** |
+| Switch engine | Tray > Settings > Show advanced |
+| Start over | Help and troubleshooting > **Reset everything** |
+| See what's happening | Hover the tray icon, or Help and troubleshooting > **Status** |
 
 ## Good to know
 
@@ -147,21 +149,21 @@ Mode names follow the engine: Turbo / Balanced / Silent with G-Helper, Performan
 
 ## Uninstall
 
-Tray > Troubleshooting > **Uninstall**. It removes the startup tasks and shortcut, removes Performance Companion's power plans and switches Windows back to the plan you used before, and asks whether to keep your data in case you reinstall. G-Helper and its settings are left untouched.
+Tray > Help and troubleshooting > **Uninstall**. It removes the startup tasks and shortcut, removes Performance Companion's power plans and switches Windows back to the plan you used before, and asks whether to keep your data in case you reinstall. G-Helper and its settings are left untouched.
 
 ## Troubleshooting
 
-**Reporting a problem:** right-click the tray icon > Troubleshooting > **Report an issue**. Type a sentence about what went wrong and your browser opens a bug report here with your device and full diagnostics already filled in (your username and PC name are hidden). Add anything else and press Submit. It needs a free GitHub account. Please report problems here rather than on Reddit, so nothing gets lost and fixes reach everyone. It includes your device, engine, versions, settings and recent activity, with your username and PC name hidden.
+**Reporting a problem:** right-click the tray icon > **Report an issue**. Type a sentence about what went wrong and your browser opens a bug report here with your device and full diagnostics already filled in (your username and PC name are hidden). Add anything else and press Submit. It needs a free GitHub account. Please report problems here rather than on Reddit, so nothing gets lost and fixes reach everyone. It includes your device, engine, versions, settings and recent activity, with your username and PC name hidden.
 
 | Symptom | Try |
 |---|---|
-| Nothing happens at all | Troubleshooting > **Setup check**. With G-Helper, it's usually G-Helper not running. |
+| Nothing happens at all | Help and troubleshooting > **Setup check**. With G-Helper, it's usually G-Helper not running. |
 | Performance mode doesn't feel faster | Set your maker's app to its highest mode while plugged in (Setup check shows how for your brand). |
 | The power plan keeps flipping | A maker's app or Handheld Companion is changing it. Turn off its automatic power mode, or its power mode / EPP overrides. |
-| A game or app doesn't trigger | Add it in **Apps and games**, or use Troubleshooting > **Watch GPU load**. Check the profile's **Game modes** setting too. |
+| A game or app doesn't trigger | Add it in **Apps and games**, or use Help and troubleshooting > **Watch GPU load**. Check the profile's **Game modes** setting too. |
 | Something that isn't a game triggers | Tray menu, top line > **Ignore**. |
-| A schedule didn't run | Make sure **Run schedules** is ticked in the Schedules window, and check the date. |
-| Wrong engine picked | Tray > Settings > **Engine**. |
+| A schedule didn't run | Make sure **Run my schedules** is ticked in the Schedules window, and check the date. |
+| Wrong engine picked | Tray > Settings > Show advanced > **Engine**. |
 
 ## License
 

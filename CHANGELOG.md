@@ -1,5 +1,19 @@
 # Changelog
 
+## 3.0.4 (October 2026)
+
+- **Simpler to use:**
+  - The tray menu ends with **Report an issue** and **Help and troubleshooting**. Diagnostics, logs, pause, reset and uninstall now live in one window.
+  - **Settings** and **Profiles** start simple, with a **Show advanced** option for the rest.
+  - **Reset everything** puts settings, profiles and power plans back to the defaults, with the option to keep your games.
+  - **Restore defaults** in Profiles.
+- **Schedules work like a calendar app:**
+  - One form for one-time or repeating schedules: every day, every weekday, weekly, every 2 weeks, or monthly.
+  - Any schedule can switch back later.
+  - A start date.
+  - **Plan a trip** is its own simple form.
+  - The window opens with examples of what schedules are for.
+
 ## 3.0.3 (October 2026)
 
 - **Report an issue:** long diagnostics now paste cleanly into the bug form (the form was resetting a pre-filled box after pasting).

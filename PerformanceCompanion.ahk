@@ -30,7 +30,7 @@ SetTitleMatchMode 2
 ;  Replaces G14 Control, Laptop Control and Clutch: settings carry over.
 ; ====================================================================
 
-global SCRIPT_VERSION := "3.0.3"      ; bump on every release so updates announce themselves
+global SCRIPT_VERSION := "3.0.4"      ; bump on every release so updates announce themselves
 global APP_NAME       := "Performance Companion"
 global REPO_URL       := "https://github.com/zonearc/PerformanceCompanion"
 
@@ -368,7 +368,7 @@ SetupItems() {
         if !automationOK
             add("error", "G-Helper self-test failed",
                 "This G-Helper version didn't respond the way Performance Companion expects, so automation is paused. "
-                . "Troubleshooting > Run G-Helper self-test to retry, or check the activity log.")
+                . "Tray > Help and troubleshooting > Run G-Helper self-test to retry, or check the activity log.")
     } else {
         missing := []
         for k in PlanKeys()
@@ -376,13 +376,13 @@ SetupItems() {
                 missing.Push(ModeName(KeyMode(k)))
         if missing.Length
             add("error", "Power plans missing: " Join(missing, ", "),
-                "Performance Companion couldn't create its power plans. Troubleshooting > Reload tries again. "
+                "Performance Companion couldn't create its power plans. Tray > Help and troubleshooting > Reload tries again. "
                 . "If it keeps failing, a company policy may be locking power settings.")
         else
             add("ok", "Performance Companion power plans ready (Eco, Work, Performance)")
         if (overlayOK = false)
             add("warn", "Windows' power mode slider can't be set on this PC",
-                "Performance Companion's plans still cap the CPU and turbo as set in Tray > Power plans. "
+                "Performance Companion's plans still cap the CPU and turbo as set in Settings > advanced > Edit power plans. "
                 . "Only the extra Best efficiency / Best performance nudge is skipped.")
         if (InternalDisplayName() = "")
             add("warn", "Built-in screen not found",
@@ -406,7 +406,7 @@ SetupItems() {
     ; Performance Companion's own startup task: present, and how its last run went.
     if !TaskExists(TASK_MAIN) {
         add("error", "Performance Companion's startup task is missing",
-            "Troubleshooting > Reload recreates it. Without it, Performance Companion won't start at login.")
+            "Tray > Help and troubleshooting > Reload recreates it. Without it, Performance Companion won't start at login.")
     } else {
         info := TaskInfo(TASK_MAIN)
         lr := info.Has("Last Result") ? info["Last Result"] : ""
@@ -568,37 +568,24 @@ SaveSetting(name, value) {
     IniWrite(value, STATE, "settings", name)
 }
 
+; Show advanced options in Settings and Profiles (remembered per user).
+AdvancedUI() => IniRead(STATE, "app", "ui_advanced", 0) = 1
+SetAdvancedUI(on) => IniWrite(on ? 1 : 0, STATE, "app", "ui_advanced")
+
 ShowSettings(*) {
     static open := 0
     if open {
         try WinActivate("ahk_id " open)
         return
     }
+    adv := AdvancedUI()
     g := Gui("+AlwaysOnTop", "Performance Companion settings")
     open := g.Hwnd
     g.SetFont("s10", "Segoe UI")
     g.MarginX := 16, g.MarginY := 12
     modeIds := ModeChoices()
-
-    g.Add("Text", "xm w440 cGray", "What each profile does is set in Tray > Profiles"
-        . (HasGH() ? "." : ", and what each mode does in Tray > Power plans."))
-
-    Section("Engine")
-    engIds := ["auto", "ghelper", "plans"]
-    Row("How modes are applied", "Automatic: G-Helper on ASUS machines that run it, Windows power plans everywhere else.`n"
-        . "G-Helper: GPU modes, charge limits, Turbo / Balanced / Silent and your custom modes.`n"
-        . "Windows power plans: works on any laptop or handheld; your maker's app sets the ceiling.`n"
-        . "Changing this reloads Performance Companion.")
-    engDdl := g.Add("DropDownList", "x+4 yp-3 w280", ["Automatic (now: " EngineName() ")", "G-Helper", "Windows power plans"])
-    engDdl.Choose(IndexOf(engIds, ENGINE_CHOICE))
-    Row("When unplugged", "Switch to a profile automatically when you unplug, and back when you plug in.`n"
-        . "A profile you pick yourself while unplugged wins.`n"
-        . "Skipped if that switch would need a restart.")
-    unIds := [""], unNames := ["Stay on the current profile"]
-    for pid in profileOrder
-        unIds.Push(pid), unNames.Push("Switch to " profiles[pid].name)
-    unDdl := g.Add("DropDownList", "x+4 yp-3 w280", unNames)
-    unDdl.Choose(IndexOf(unIds, BATTERY_PROFILE))
+    engIds := ["auto", "ghelper", "plans"], updIds := ["notify", "auto", "off"]
+    engDdl := 0, custCb := 0, fgSl := 0, bgSl := 0, idSl := 0, delEd := 0, warnEd := 0
 
     Section(title) {
         g.SetFont("s10 bold")
@@ -619,73 +606,97 @@ ShowSettings(*) {
         return sl
     }
 
-    Section("Game modes")
-    Row("Default mode for games", "Mode for games you haven't set a mode for.`n"
-        . "Per-game choices (tray menu, Ctrl+Alt+G, Games window) always win.`n"
+    advCb := g.Add("Checkbox", "xm", "Show advanced settings")
+    advCb.Value := adv
+    AddTip(advCb, "Most people never need these: the engine, detection thresholds,`ncountdowns and G-Helper custom modes.")
+    advCb.OnEvent("Click", (*) => (SetAdvancedUI(advCb.Value), Close(), ShowSettings()))
+    g.Add("Text", "xm y+6 w440 cGray", "What each profile does is set in Tray > Profiles"
+        . (HasGH() ? "." : ", and what each mode does under advanced settings."))
+
+    Section("Everyday")
+    Row("When unplugged", "Switch to a profile automatically when you unplug, and back when you plug in.`n"
+        . "A profile you pick yourself while unplugged wins.`n"
+        . "Skipped if that switch would need a restart.")
+    unIds := [""], unNames := ["Stay on the current profile"]
+    for pid in profileOrder
+        unIds.Push(pid), unNames.Push("Switch to " profiles[pid].name)
+    unDdl := g.Add("DropDownList", "x+4 yp-3 w280", unNames)
+    unDdl.Choose(IndexOf(unIds, BATTERY_PROFILE))
+    Row("Default mode for games", "Mode for games and apps you haven't set a mode for.`n"
+        . "Per-app choices (tray menu, Ctrl+Alt+G, Apps and games) always win.`n"
         . "A profile can still limit it (Profiles > Game mode limit).")
     names := []
     for m in modeIds
         names.Push(ModeName(m))
-    defDdl := g.Add("DropDownList", "x+4 yp-3 w150", names)
+    defDdl := g.Add("DropDownList", "x+4 yp-3 w280", names)
     defDdl.Choose(IndexOf(modeIds, DEFAULT_GAME_MODE))
     learnCb := g.Add("Checkbox", "xm+12 y+10", "Learn new games automatically")
     learnCb.Value := LEARNING_ENABLED
     AddTip(learnCb, "When an unlisted app holds heavy GPU load in game mode for " LearnCycles * 5 " seconds,`n"
         . "remember it as a game so it's recognized instantly next time.")
-    custCb := 0
-    if HasGH() {
-    custCb := g.Add("Checkbox", "xm+12 y+8", "Offer my G-Helper custom modes for apps and games")
-    custCb.Value := CUSTOM_MODES
-    AddTip(custCb, "G-Helper lets you build your own modes (Fans + Power > the + button),`n"
-        . "for example Turbo power with a quieter fan curve. Performance Companion lists them by the names`n"
-        . "you gave them, so you can give one to FL Studio, Blender or a game.`n"
-        . "Found now: " (customModes.Count ? customModes.Count : "none") ".")
-    }
-
-    Section("Detection")
-    fgSl := SliderRow("Fullscreen game threshold", GameLoadForeground, 10, 90, "%",
-        "GPU load that counts as a game when the app is fullscreen or borderless in front.`n"
-        . "Lower catches lighter games; higher avoids false triggers.")
-    bgSl := SliderRow("Any-app threshold", GameLoadBackground, 30, 100, "%",
-        "GPU load that counts as a game for any app, even windowed or in the background.")
-    idSl := SliderRow("Release below", GpuIdleThreshold, 5, 40, "%",
-        "Game mode ends when the game's load stays under this for " ReleaseCycles * 5 " seconds.")
-
-    Section("Restarts and schedules")
-    Row("Countdown (seconds)", "Time before a restart or shutdown. Win+R, shutdown /a cancels it.")
-    delEd := g.Add("Edit", "x+4 yp-3 w60 Number", SHUTDOWN_DELAY)
-    g.Add("UpDown", "Range3-120", SHUTDOWN_DELAY)
-    AddTip(delEd, "Time before a restart or shutdown. Win+R, shutdown /a cancels it.")
-    Row("Schedule warning (minutes)", "How long before a scheduled restart or shutdown the warning appears.`n"
-        . "A second reminder comes 2 minutes before.")
-    warnEd := g.Add("Edit", "x+4 yp-3 w60 Number", WARN_MINUTES)
-    g.Add("UpDown", "Range3-60", WARN_MINUTES)
-    schCb := g.Add("Checkbox", "xm+12 y+10", "Run schedules (Tray > Schedules)")
+    schCb := g.Add("Checkbox", "xm+12 y+8", "Run my schedules (Tray > Schedules)")
     schCb.Value := SCHEDULES_ENABLED
-    AddTip(schCb, "Master switch for timed profile switches and trip charging.`n"
+    AddTip(schCb, "Master switch for timed profile switches" (HasGH() ? " and trip charging" : "") ".`n"
         . "Off until you turn it on. Each schedule also has its own on/off.")
-
-    Section("Updates")
-    updIds := ["notify", "auto", "off"]
-    Row("New versions", "Performance Companion checks GitHub once a day for a newer release.`n"
+    popCb := g.Add("Checkbox", "xm+12 y+8", "Show on-screen popups")
+    popCb.Value := SHOW_POPUPS
+    AddTip(popCb, "Brief messages when a game is detected, a mode changes, and so on.`n"
+        . "Warnings (like Ultimate on battery, or a scheduled restart) always show.")
+    Row("Updates", "Performance Companion checks GitHub once a day for a newer release.`n"
         . "Tell me: a message and an Update item in the tray menu.`n"
         . "Install automatically: downloads and installs when no game or switch is running.`n"
         . "Your settings, profiles and games always carry over.")
     updDdl := g.Add("DropDownList", "x+4 yp-3 w280", ["Tell me when there's an update", "Install updates automatically", "Don't check"])
     updDdl.Choose(IndexOf(updIds, UPDATE_MODE))
 
-    Section("Notifications")
-    popCb := g.Add("Checkbox", "xm+12 y+10", "Show on-screen popups")
-    popCb.Value := SHOW_POPUPS
-    AddTip(popCb, "Brief messages when a game is detected, a mode changes, and so on.`n"
-        . "Warnings (like Ultimate on battery, or a scheduled restart) always show.")
+    if adv {
+        Section("Engine")
+        Row("How modes are applied", "Automatic: G-Helper on ASUS machines that run it, Windows power plans everywhere else.`n"
+            . "G-Helper: GPU modes, charge limits, Turbo / Balanced / Silent and your custom modes.`n"
+            . "Windows power plans: works on any laptop or handheld; your maker's app sets the ceiling.`n"
+            . "Changing this reloads Performance Companion.")
+        engDdl := g.Add("DropDownList", "x+4 yp-3 w280", ["Automatic (now: " EngineName() ")", "G-Helper", "Windows power plans"])
+        engDdl.Choose(IndexOf(engIds, ENGINE_CHOICE))
+        if HasGH() {
+            custCb := g.Add("Checkbox", "xm+12 y+10", "Offer my G-Helper custom modes for apps and games")
+            custCb.Value := CUSTOM_MODES
+            AddTip(custCb, "G-Helper lets you build your own modes (Fans + Power > the + button),`n"
+                . "for example Turbo power with a quieter fan curve. They're listed by the names`n"
+                . "you gave them, so you can give one to FL Studio, Blender or a game.`n"
+                . "Found now: " (customModes.Count ? customModes.Count : "none") ".")
+        }
+
+        if !HasGH() {
+            pb := g.Add("Button", "xm+12 y+10 w200", "Edit power plans...")
+            pb.OnEvent("Click", (*) => (Close(), ShowPlans()))
+            AddTip(pb, "What Performance, Work and Eco actually do: CPU limit, turbo boost,`nscreen refresh rate and Energy Saver.")
+        }
+
+        Section("Game detection")
+        fgSl := SliderRow("Fullscreen game threshold", GameLoadForeground, 10, 90, "%",
+            "GPU load that counts as a game when the app is fullscreen or borderless in front.`n"
+            . "Lower catches lighter games; higher avoids false triggers.")
+        bgSl := SliderRow("Any-app threshold", GameLoadBackground, 30, 100, "%",
+            "GPU load that counts as a game for any app, even windowed or in the background.")
+        idSl := SliderRow("Release below", GpuIdleThreshold, 5, 40, "%",
+            "Game mode ends when the game's load stays under this for " ReleaseCycles * 5 " seconds.")
+
+        Section("Restarts and schedules")
+        Row("Countdown (seconds)", "Time before a restart or shutdown. Win+R, shutdown /a cancels it.")
+        delEd := g.Add("Edit", "x+4 yp-3 w60 Number", SHUTDOWN_DELAY)
+        g.Add("UpDown", "Range3-120", SHUTDOWN_DELAY)
+        Row("Schedule warning (minutes)", "How long before a scheduled restart or shutdown the warning appears.`n"
+            . "A second reminder comes 2 minutes before.")
+        warnEd := g.Add("Edit", "x+4 yp-3 w60 Number", WARN_MINUTES)
+        g.Add("UpDown", "Range3-60", WARN_MINUTES)
+    }
 
     b := g.Add("Button", "xm y+18 w100 Default", "Save")
     b.OnEvent("Click", (*) => Save())
     AddTip(b, "Save and apply now.")
-    b := g.Add("Button", "x+8 w120", "Reset to defaults")
+    b := g.Add("Button", "x+8 w130", "Reset to defaults")
     b.OnEvent("Click", (*) => Defaults())
-    AddTip(b, "Put every setting in this window back to the script's defaults.`nDoesn't touch your profiles, schedules or games.")
+    AddTip(b, "Put every setting here (basic and advanced) back to the defaults.`nDoesn't touch your profiles, schedules or games.")
     b := g.Add("Button", "x+8 w90", "Cancel")
     b.OnEvent("Click", (*) => Close())
     g.OnEvent("Close", (*) => Close())
@@ -699,32 +710,37 @@ ShowSettings(*) {
     }
 
     Save() {
-        fg := fgSl.Value, bg := bgSl.Value
-        if (bg < fg)
-            bg := fg                                  ; any-app can't be below fullscreen
         wasSched := SCHEDULES_ENABLED
         SaveSetting("DEFAULT_GAME_MODE", modeIds[defDdl.Value])
         SaveSetting("LEARNING_ENABLED", learnCb.Value)
-        SaveSetting("CUSTOM_MODES", custCb ? custCb.Value : CUSTOM_MODES)
-        SaveSetting("GameLoadForeground", fg)
-        SaveSetting("GameLoadBackground", bg)
-        SaveSetting("GpuIdleThreshold", idSl.Value)
-        SaveSetting("SHUTDOWN_DELAY", Max(3, Min(120, Integer(delEd.Value = "" ? 10 : delEd.Value))))
-        SaveSetting("WARN_MINUTES", Max(3, Min(60, Integer(warnEd.Value = "" ? 10 : warnEd.Value))))
         SaveSetting("SHOW_POPUPS", popCb.Value)
         SetSchedulesEnabled(schCb.Value, wasSched)
         SaveSetting("BATTERY_PROFILE", unIds[unDdl.Value])
         SaveSetting("UPDATE_MODE", updIds[updDdl.Value])
-        newEng := engIds[engDdl.Value]
-        engChanged := (newEng != ENGINE_CHOICE)
-        SaveSetting("ENGINE_CHOICE", newEng)
+        engChanged := false
+        if adv {
+            fg := fgSl.Value, bg := bgSl.Value
+            if (bg < fg)
+                bg := fg                              ; any-app can't be below fullscreen
+            SaveSetting("GameLoadForeground", fg)
+            SaveSetting("GameLoadBackground", bg)
+            SaveSetting("GpuIdleThreshold", idSl.Value)
+            SaveSetting("SHUTDOWN_DELAY", Max(3, Min(120, Integer(delEd.Value = "" ? 10 : delEd.Value))))
+            SaveSetting("WARN_MINUTES", Max(3, Min(60, Integer(warnEd.Value = "" ? 10 : warnEd.Value))))
+            if custCb
+                SaveSetting("CUSTOM_MODES", custCb.Value)
+            newEng := engIds[engDdl.Value]
+            engChanged := (newEng != ENGINE_CHOICE)
+            SaveSetting("ENGINE_CHOICE", newEng)
+        }
         Log("SETTINGS    saved: default " ModeName(DEFAULT_GAME_MODE) ", learning " (LEARNING_ENABLED ? "on" : "off")
-            ", custom modes " (CUSTOM_MODES ? "on" : "off") ", thresholds " fg "/" bg "/" GpuIdleThreshold
+            ", unplug " (BATTERY_PROFILE = "" ? "stay" : BATTERY_PROFILE) ", updates " UPDATE_MODE
+            ", custom modes " (CUSTOM_MODES ? "on" : "off") ", thresholds " GameLoadForeground "/" GameLoadBackground "/" GpuIdleThreshold
             ", countdown " SHUTDOWN_DELAY "s, warning " WARN_MINUTES " min, schedules " (SCHEDULES_ENABLED ? "on" : "off")
-            ", popups " (SHOW_POPUPS ? "on" : "off"))
+            ", popups " (SHOW_POPUPS ? "on" : "off") ", engine " ENGINE_CHOICE)
         Close()
         if engChanged {
-            Log("SETTINGS    engine set to " newEng "; reloading")
+            Log("SETTINGS    engine changed; reloading")
             Reload()
             return
         }
@@ -733,19 +749,27 @@ ShowSettings(*) {
     }
 
     Defaults() {
-        if (MsgBox("Reset every setting in this window to the defaults?", "Performance Companion settings", "YesNo Icon?") != "Yes")
+        if (MsgBox("Reset every setting (basic and advanced) to the defaults?`n`nYour profiles, schedules and games stay as they are.",
+            "Performance Companion settings", "YesNo Icon? Owner" g.Hwnd) != "Yes")
             return
-        wasSched := SCHEDULES_ENABLED
-        for name in SettingNames() {
-            SetSetting(name, SETTING_DEFAULTS[name])
-            try IniDelete(STATE, "settings", name)
-        }
-        SetSchedulesEnabled(SCHEDULES_ENABLED, wasSched)
-        Log("SETTINGS    reset to defaults")
+        ResetSettings()
         Close()
         UpdateUI()
         ShowSettings()
     }
+}
+
+; Puts every app-wide setting back to its default. Reloads if the engine changes.
+ResetSettings() {
+    wasSched := SCHEDULES_ENABLED, oldEng := ENGINE_CHOICE
+    for name in SettingNames() {
+        SetSetting(name, SETTING_DEFAULTS[name])
+        try IniDelete(STATE, "settings", name)
+    }
+    SetSchedulesEnabled(SCHEDULES_ENABLED, wasSched)
+    Log("SETTINGS    reset to defaults")
+    if (ENGINE_CHOICE != oldEng)
+        SetTimer(() => Reload(), -500)
 }
 
 IndexOf(arr, v) {
@@ -1365,6 +1389,27 @@ AnswerGHelperPrompts() {
         Log("PROMPT      no second prompt")
 }
 
+; Profiles back to the three defaults for this engine. Custom profiles are
+; removed; the active profile stays if it's one of the defaults.
+RestoreDefaultProfiles() {
+    for id in profileOrder
+        if !InArr(["everyday", "gaming", "travel"], id) {
+            DisableSchedulesFor(id)
+            try IniDelete(STATE, "profile." id)
+        }
+    for id in ["everyday", "gaming", "travel"]
+        try IniDelete(STATE, "profile." id)
+    try IniDelete(STATE, "profiles", "order")
+    keep := profile
+    if !InArr(["everyday", "gaming", "travel"], keep)
+        keep := "everyday"
+    try IniDelete(STATE, "app", "profile")
+    LoadProfiles()                      ; recreates the defaults
+    SetProfile(keep)
+    Log("PROFILES    restored the default profiles")
+    SetTimer(EnforceState.Bind(true), -200)
+}
+
 ; ====================================================================
 ;  PROFILES WINDOW (Tray > Profiles)
 ; ====================================================================
@@ -1389,16 +1434,22 @@ ShowProfiles(*) {
     capNames := ["No limit (each app's own mode)", ModeName(0) " at most", ModeName(2) " for everything"]
     lvlIds := [1, 0, 2], lvlNames := [ModeName(1), ModeName(0), ModeName(2)]
     gh := HasGH()
-    gpuDdl := 0, chSl := 0, chTx := 0, afterDdl := 0
+    adv := AdvancedUI()
+    gpuDdl := 0, chSl := 0, chTx := 0, afterDdl := 0, iconDdl := 0, capDdl := 0, closeEd := 0, launchEd := 0
     afterNames := ["Restart only if the GPU change needs it", "Always shut down after switching (pack and go)"]
 
     g.Add("Text", "xm w700", "Each profile is a full set of performance settings. Switch from the tray, the Start menu (Performance Companion profiles), "
         . "Ctrl+Win+Alt+T, or a schedule. Hover anything for help.")
+    advCb := g.Add("Checkbox", "xm y+8", "Show advanced options")
+    advCb.Value := adv
+    AddTip(advCb, "Adds the tray icon, game mode limit, " (gh ? "what happens after switching, " : "")
+        . "apps to open or close when switching,`nreordering, and restoring the default profiles.")
+    advCb.OnEvent("Click", (*) => ToggleAdv())
     g.SetFont("s10 bold c1B5E20")
     activeTx := g.Add("Text", "xm y+10 w180", "")
     g.SetFont("s10 norm cDefault")
     AddTip(activeTx, "The profile the laptop is in right now.")
-    lb := g.Add("ListBox", "xm y+4 w180 r18 Section")
+    lb := g.Add("ListBox", "xm y+4 w180 r" (adv ? 18 : 11) " Section")
     AddTip(lb, "Your profiles, in the order they appear in the tray menu.`n"
         . "The active one has a green dot. Pick any profile to edit it on the right.")
     lb.OnEvent("Change", (*) => Picked())
@@ -1421,9 +1472,11 @@ ShowProfiles(*) {
     AddTip(nameEd, tipName), nameEd.OnEvent("Change", Changed)
 
     tipIcon := "Tray icon while this profile is active, so you can tell at a glance."
-    Lbl("Tray icon", tipIcon)
-    iconDdl := g.Add("DropDownList", "x+4 yp-3 w300", iconNames)
-    AddTip(iconDdl, tipIcon), iconDdl.OnEvent("Change", Changed)
+    if adv {
+        Lbl("Tray icon", tipIcon)
+        iconDdl := g.Add("DropDownList", "x+4 yp-3 w300", iconNames)
+        AddTip(iconDdl, tipIcon), iconDdl.OnEvent("Change", Changed)
+    }
 
     tipGpu := "Optimized: NVIDIA off on battery for runtime, on when plugged in. No restart to switch.`n"
         . "Ultimate: NVIDIA wired straight to the screen. Often 20-30% faster in games,`n"
@@ -1466,15 +1519,17 @@ ShowProfiles(*) {
 
     tipCap := "Upper limit on game modes in this profile, whatever each game asks for.`n"
         . "Example: a hotel-room or late-night profile that never goes louder than " ModeName(0) "."
-    Lbl("Game mode limit", tipCap)
-    capDdl := g.Add("DropDownList", "x+4 yp-3 w300", capNames)
-    AddTip(capDdl, tipCap), capDdl.OnEvent("Change", Changed)
+    if adv {
+        Lbl("Game mode limit", tipCap)
+        capDdl := g.Add("DropDownList", "x+4 yp-3 w300", capNames)
+        AddTip(capDdl, tipCap), capDdl.OnEvent("Change", Changed)
+    }
 
     tipAfter := "Restart only if needed: Eco / Standard / Optimized switch instantly; only entering or`n"
         . "leaving Ultimate restarts.`n"
         . "Always shut down: for a travel profile. Switch, the laptop powers off, pack it,`n"
         . "and it boots ready on the road. (Entering Ultimate always restarts instead.)"
-    if gh {
+    if (gh && adv) {
         Lbl("After switching to it", tipAfter)
         afterDdl := g.Add("DropDownList", "x+4 yp-3 w300", afterNames)
         AddTip(afterDdl, tipAfter), afterDdl.OnEvent("Change", Changed)
@@ -1483,25 +1538,27 @@ ShowProfiles(*) {
     tipClose := "Programs to close when you switch to this profile, by exe name, separated by commas.`n"
         . "Example for Travel: steam.exe, battle.net.exe. They're asked to close like clicking X,`n"
         . "so they can save first. Skipped when the switch restarts the laptop anyway."
-    Lbl("Close these apps", tipClose)
-    closeEd := g.Add("Edit", "x+4 yp-3 w300")
-    DllCall("SendMessage", "Ptr", closeEd.Hwnd, "UInt", 0x1501, "Ptr", 1, "WStr", "e.g. steam.exe, discord.exe")   ; grey hint in the empty box
-    g.SetFont("s9 cGray")
-    g.Add("Text", "xp y+2 w380", "Closed when you switch to this profile. Separate with commas.")
-    g.SetFont("s10 norm cDefault")
-    AddTip(closeEd, tipClose), closeEd.OnEvent("Change", Changed)
+    if adv {
+        Lbl("Close these apps", tipClose)
+        closeEd := g.Add("Edit", "x+4 yp-3 w300")
+        DllCall("SendMessage", "Ptr", closeEd.Hwnd, "UInt", 0x1501, "Ptr", 1, "WStr", "e.g. steam.exe, discord.exe")   ; grey hint in the empty box
+        g.SetFont("s9 cGray")
+        g.Add("Text", "xp y+2 w380", "Closed when you switch to this profile. Separate with commas.")
+        g.SetFont("s10 norm cDefault")
+        AddTip(closeEd, tipClose), closeEd.OnEvent("Change", Changed)
 
-    tipLaunch := "Programs, shortcuts or web links to open when you switch to this profile, one per line.`n"
-        . "Example: Steam and Discord for Gaming. After a restart they open once you're back in Windows."
-    Lbl("Open these apps", tipLaunch)
-    launchEd := g.Add("Edit", "x+4 yp-3 w300 r3 -Wrap HScroll")
-    AddTip(launchEd, tipLaunch), launchEd.OnEvent("Change", Changed)
-    br := g.Add("Button", "xp y+4 w90", "Browse...")
-    g.SetFont("s9 cGray")
-    g.Add("Text", "x+8 yp+4 w300", "Opened when you switch to this profile. One per line.")
-    g.SetFont("s10 norm cDefault")
-    br.OnEvent("Click", (*) => Browse())
-    AddTip(br, "Pick a program or shortcut to add to the list.")
+        tipLaunch := "Programs, shortcuts or web links to open when you switch to this profile, one per line.`n"
+            . "Example: Steam and Discord for Gaming. After a restart they open once you're back in Windows."
+        Lbl("Open these apps", tipLaunch)
+        launchEd := g.Add("Edit", "x+4 yp-3 w300 r3 -Wrap HScroll")
+        AddTip(launchEd, tipLaunch), launchEd.OnEvent("Change", Changed)
+        br := g.Add("Button", "xp y+4 w90", "Browse...")
+        g.SetFont("s9 cGray")
+        g.Add("Text", "x+8 yp+4 w300", "Opened when you switch to this profile. One per line.")
+        g.SetFont("s10 norm cDefault")
+        br.OnEvent("Click", (*) => Browse())
+        AddTip(br, "Pick a program or shortcut to add to the list.")
+    }
 
     preview := g.Add("Text", X "y+12 w480 r2 cGray", "")
 
@@ -1515,12 +1572,18 @@ ShowProfiles(*) {
     b := g.Add("Button", "x+6 w80", "Delete")
     b.OnEvent("Click", (*) => DeleteProfile())
     AddTip(b, "Delete the selected profile. The active profile can't be deleted;`nswitch to another one first. Schedules that used it are turned off.")
-    b := g.Add("Button", "x+6 w80", "Move up")
-    b.OnEvent("Click", (*) => MoveProfile(-1))
-    AddTip(b, "Move up in the tray menu.")
-    b := g.Add("Button", "x+4 w90", "Move down")
-    b.OnEvent("Click", (*) => MoveProfile(1))
-    AddTip(b, "Move down in the tray menu.")
+    if adv {
+        b := g.Add("Button", "x+6 w80", "Move up")
+        b.OnEvent("Click", (*) => MoveProfile(-1))
+        AddTip(b, "Move up in the tray menu.")
+        b := g.Add("Button", "x+4 w90", "Move down")
+        b.OnEvent("Click", (*) => MoveProfile(1))
+        AddTip(b, "Move down in the tray menu.")
+        b := g.Add("Button", "x+4 w130", "Restore defaults")
+        b.OnEvent("Click", (*) => RestoreDefaults())
+        AddTip(b, "Replace all profiles with the three defaults (" (gh ? "Work, Gaming, Travel" : "Work, Gaming, Battery Saver") ").`n"
+            . "Your games, settings and schedules stay; schedules that used a removed profile are turned off.")
+    }
     b := g.Add("Button", "x+18 w100", "Switch to it")
     b.OnEvent("Click", (*) => SwitchNow())
     AddTip(b, "Save, then switch to the selected profile (asks first if it restarts or shuts down).")
@@ -1553,18 +1616,22 @@ ShowProfiles(*) {
         p := profiles[id]
         lb.Choose(IndexOf(profileOrder, id))
         nameEd.Value := p.name
-        iconDdl.Choose(IndexOf(ProfileIcons(), p.icon))
+        if iconDdl
+            iconDdl.Choose(IndexOf(ProfileIcons(), p.icon))
         if gh {
             gpuDdl.Choose(IndexOf(ProfileGpus(), p.gpu))
             chSl.Value := p.charge, chTx.Value := p.charge "%"
-            afterDdl.Choose(IndexOf(ProfileAfters(), p.after))
+            if afterDdl
+                afterDdl.Choose(IndexOf(ProfileAfters(), p.after))
         }
         batDdl.Choose(IndexOf(lvlIds, p.battery))
         acDdl.Choose(IndexOf(lvlIds, p.ac))
         gamesDdl.Choose(IndexOf(ProfileGames(), p.games))
-        capDdl.Choose(IndexOf(ProfileCaps(), p.cap))
-        launchEd.Value := StrReplace(p.launch, "|", "`r`n")
-        closeEd.Value := StrReplace(p.close, "|", ", ")
+        if adv {
+            capDdl.Choose(IndexOf(ProfileCaps(), p.cap))
+            launchEd.Value := StrReplace(p.launch, "|", "`r`n")
+            closeEd.Value := StrReplace(p.close, "|", ", ")
+        }
         dirty := false
         loading := false
         UpdatePreview()
@@ -1573,10 +1640,14 @@ ShowProfiles(*) {
     ; Reads the form into a profile object (not saved yet).
     FromForm() {
         old := profiles.Has(cur) ? profiles[cur] : NewProfileObj("", "custom", "auto", 80, 2, 0, "ac", "none", "auto")
-        p := NewProfileObj(Trim(nameEd.Value), ProfileIcons()[iconDdl.Value], gh ? ProfileGpus()[gpuDdl.Value] : old.gpu,
+        p := NewProfileObj(Trim(nameEd.Value), iconDdl ? ProfileIcons()[iconDdl.Value] : old.icon, gh ? ProfileGpus()[gpuDdl.Value] : old.gpu,
             gh ? Round(chSl.Value / 5) * 5 : old.charge, lvlIds[batDdl.Value], lvlIds[acDdl.Value],
-            ProfileGames()[gamesDdl.Value], ProfileCaps()[capDdl.Value], gh ? ProfileAfters()[afterDdl.Value] : old.after)
+            ProfileGames()[gamesDdl.Value], capDdl ? ProfileCaps()[capDdl.Value] : old.cap, afterDdl ? ProfileAfters()[afterDdl.Value] : old.after)
         p.id := cur
+        if !adv {
+            p.launch := old.launch, p.close := old.close
+            return p
+        }
         lines := []
         for x in StrSplit(launchEd.Value, "`n", "`r")
             if (Trim(x) != "")
@@ -1749,6 +1820,28 @@ ShowProfiles(*) {
         SwitchToProfile(id, "manual")
     }
 
+    ToggleAdv() {
+        if !AskSave() {
+            advCb.Value := adv
+            return
+        }
+        SetAdvancedUI(advCb.Value)
+        open := 0
+        ClearTips(g)
+        g.Destroy()
+        ShowProfiles()
+    }
+
+    RestoreDefaults() {
+        if (MsgBox("Replace all profiles with the three defaults?`n`nYour games, settings and schedules stay. "
+            . "Schedules that used a removed profile are turned off.", "Performance Companion profiles", "YesNo Icon? Owner" g.Hwnd) != "Yes")
+            return
+        RestoreDefaultProfiles()
+        dirty := false
+        FillList()
+        Load(profile)
+    }
+
     CloseWin() {
         if !AskSave()
             return
@@ -1799,7 +1892,7 @@ ReadSchedule(id) {
     for k in SchedKeys()
         s.%k% := IniRead(STATE, sec, k, s.%k%)
     s.id := id
-    s.type := PickOf(s.type, ["weekly", "once", "trip"], "weekly")
+    s.type := PickOf(s.type, ["weekly", "monthly", "once", "trip"], "weekly")
     s.enabled := (s.enabled = 1) ? 1 : 0
     s.end_on := (s.end_on = 1) ? 1 : 0
     s.every := (s.every = 2) ? 2 : 1
@@ -1842,9 +1935,15 @@ CreateDefaultSchedules() {
     tr := NewSchedObj("trip")
     tr.id := "trip", tr.name := "Trip", tr.profile := "travel"
     tr.date := SubStr(DateAdd(A_Now, 7, "Days"), 1, 8), tr.time := "0700", tr.before := 15
-    for s in [gn, tr]
-        WriteSchedule(s)
-    IniWrite("gamenight|trip", STATE, "schedules", "order")
+    gn.date := SubStr(A_Now, 1, 8)
+    if (BACKEND = "ghelper") {
+        for s in [gn, tr]
+            WriteSchedule(s)
+        IniWrite("gamenight|trip", STATE, "schedules", "order")
+    } else {
+        WriteSchedule(gn)
+        IniWrite("gamenight", STATE, "schedules", "order")
+    }
 }
 
 UniqueSchedId() {
@@ -1897,15 +1996,26 @@ WeekStart(t) => SubStr(DateAdd(DayStart(t), -(WDayOf(t) - 1), "Days"), 1, 8)
 ; (at) or a weekly pattern (days + hm, shifted a day when it crosses midnight).
 Triggers(s) {
     out := []
-    if (s.type = "weekly") {
-        if (s.days != "" && profiles.Has(s.profile))
-            out.Push({kind: "start", at: "", days: s.days, hm: s.time, every: s.every, anchor: s.anchor, shift: 0, profile: s.profile})
-        if (s.end_on && s.days != "" && profiles.Has(s.back))
-            out.Push({kind: "end", at: "", days: s.days, hm: s.end_time, every: s.every, anchor: s.anchor,
-                shift: (s.end_time <= s.time) ? 1 : 0, profile: s.back})
+    endShift := (s.end_time <= s.time) ? 1 : 0           ; an end time earlier than the start = next day
+    if (s.type = "weekly" || s.type = "monthly") {
+        base := {at: "", hm: s.time, shift: 0, from: s.date}
+        if (s.type = "weekly")
+            base.days := s.days, base.every := s.every, base.anchor := s.anchor
+        else
+            base.dom := Integer(SubStr(s.date, 7, 2))
+        if ((s.type = "monthly" || s.days != "") && profiles.Has(s.profile)) {
+            t := CloneObj(base), t.kind := "start", t.profile := s.profile
+            out.Push(t)
+        }
+        if (s.end_on && (s.type = "monthly" || s.days != "") && profiles.Has(s.back)) {
+            t := CloneObj(base), t.kind := "end", t.hm := s.end_time, t.shift := endShift, t.profile := s.back
+            out.Push(t)
+        }
     } else if (s.type = "once") {
         if profiles.Has(s.profile)
             out.Push({kind: "start", at: s.date s.time "00", profile: s.profile})
+        if (s.end_on && profiles.Has(s.back))
+            out.Push({kind: "end", at: DateAdd(s.date s.end_time "00", endShift, "Days"), profile: s.back})
     } else if (s.type = "trip") {
         if (s.before > 0 && profiles.Has(s.profile))
             out.Push({kind: "start", at: DateAdd(s.date s.time "00", -s.before, "Minutes"), profile: s.profile})
@@ -1913,24 +2023,48 @@ Triggers(s) {
     return out
 }
 
+CloneObj(o) {
+    c := {}
+    for k, v in o.OwnProps()
+        c.%k% := v
+    return c
+}
+
+DaysInMonth(t) {
+    first := SubStr(t, 1, 6) "01000000"
+    nextFirst := DateAdd(first, 32, "Days")
+    nextFirst := SubStr(nextFirst, 1, 6) "01000000"
+    return DateDiff(nextFirst, first, "Days")
+}
+
 ; The trigger's moment on a given day, or "" if it doesn't act that day.
 OccOnDay(trig, day) {
     base := DateAdd(DayStart(day), -trig.shift, "Days")      ; the day the schedule "starts" on
-    if !InStr("," trig.days ",", "," WDayOf(base) ",")
-        return ""
-    if (trig.every = 2) {
-        weeks := Round(DateDiff(WeekStart(base) "000000", trig.anchor "000000", "Days") / 7)
-        if Mod(Abs(weeks), 2)
+    if (trig.HasOwnProp("from") && trig.from != "" && SubStr(base, 1, 8) < trig.from)
+        return ""                                            ; before the schedule's start date
+    if trig.HasOwnProp("dom") {
+        if (Integer(SubStr(base, 7, 2)) != Min(trig.dom, DaysInMonth(base)))
             return ""
+    } else {
+        if !InStr("," trig.days ",", "," WDayOf(base) ",")
+            return ""
+        if (trig.every = 2) {
+            weeks := Round(DateDiff(WeekStart(base) "000000", trig.anchor "000000", "Days") / 7)
+            if Mod(Abs(weeks), 2)
+                return ""
+        }
     }
     return SubStr(DayStart(day), 1, 8) trig.hm "00"
 }
 
-; Latest occurrence at or before t (within two weeks), or "".
+; How far to search: two weeks for daily and weekly patterns, two months for monthly.
+SearchDays(trig) => trig.HasOwnProp("dom") ? 64 : 16
+
+; Latest occurrence at or before t, or "".
 PrevOcc(trig, t) {
     if (trig.at != "")
         return (trig.at <= t) ? trig.at : ""
-    Loop 16 {
+    Loop SearchDays(trig) {
         o := OccOnDay(trig, DateAdd(t, -(A_Index - 1), "Days"))
         if (o != "" && o <= t)
             return o
@@ -1938,11 +2072,11 @@ PrevOcc(trig, t) {
     return ""
 }
 
-; First occurrence strictly after t (within two weeks), or "".
+; First occurrence strictly after t, or "".
 NextOcc(trig, t) {
     if (trig.at != "")
         return (trig.at > t) ? trig.at : ""
-    Loop 16 {
+    Loop SearchDays(trig) {
         o := OccOnDay(trig, DateAdd(t, A_Index - 1, "Days"))
         if (o != "" && o > t)
             return o
@@ -1956,7 +2090,7 @@ NextOcc(trig, t) {
 MaxLate(s, trig, occ) {
     if (s.type = "trip")
         return s.before + 60
-    if (trig.kind = "start" && s.type = "weekly" && s.end_on) {
+    if (trig.kind = "start" && s.type != "trip" && s.end_on) {
         for t in Triggers(s)
             if (t.kind = "end" && (e := NextOcc(t, occ)) != "")
                 return Max(0, DateDiff(e, occ, "Minutes") - 15)
@@ -2330,13 +2464,16 @@ InArr(arr, v) {
             return true
     return false
 }
-
 ; ====================================================================
 ;  SCHEDULES WINDOW (Tray > Schedules)
+;  Works like a calendar app: a schedule happens once or repeats (every
+;  day, every weekday, weekly, every 2 weeks, monthly), switches to a
+;  profile, and can switch back later. Trips are their own simple form.
 ; ====================================================================
 DayOrder() => [2, 3, 4, 5, 6, 7, 1]                        ; Mon..Sun shown, WDay values stored
 DayShort(d) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d]
 HM(hm) => SubStr(hm, 1, 2) ":" SubStr(hm, 3, 2)
+Ordinal(n) => n (Mod(n, 100) >= 11 && Mod(n, 100) <= 13 ? "th" : Mod(n, 10) = 1 ? "st" : Mod(n, 10) = 2 ? "nd" : Mod(n, 10) = 3 ? "rd" : "th")
 
 DaysText(days) {
     set := "," days ","
@@ -2353,17 +2490,38 @@ DaysText(days) {
 
 PName(id) => profiles.Has(id) ? profiles[id].name : "(none)"
 
+; The repeat choices, as shown and as stored.
+RepeatNames(dom) => ["Doesn't repeat", "Every day", "Every weekday (Mon to Fri)", "Every week on...", "Every 2 weeks on...",
+    "Every month on the " Ordinal(dom)]
+RepeatOf(s) {
+    if (s.type = "once")
+        return 1
+    if (s.type = "monthly")
+        return 6
+    if (s.every = 2)
+        return 5
+    n := StrSplit(s.days, ",").Length
+    if (n = 7)
+        return 2
+    if (s.days = "2,3,4,5,6")
+        return 3
+    return 4
+}
+
 WhenText(s) {
     switch s.type {
-        case "weekly": return DaysText(s.days) " " HM(s.time) (s.every = 2 ? ", every 2nd week" : "")
-        case "once":   return FormatTime(s.date s.time "00", "ddd yyyy-MM-dd HH:mm")
-        case "trip":   return "Leave " FormatTime(s.date s.time "00", "ddd yyyy-MM-dd HH:mm")
+        case "weekly":
+            r := RepeatOf(s)
+            return (r = 2 ? "Every day" : r = 3 ? "Weekdays" : (s.every = 2 ? "Every 2 weeks, " : "") DaysText(s.days)) " " HM(s.time)
+        case "monthly": return "Monthly on the " Ordinal(Integer(SubStr(s.date, 7, 2))) " at " HM(s.time)
+        case "once":    return FormatTime(s.date s.time "00", "ddd MMM d, HH:mm")
+        case "trip":    return "Leave " FormatTime(s.date s.time "00", "ddd MMM d, HH:mm")
     }
     return ""
 }
 
 ThenText(s) {
-    if (s.type = "weekly" && s.end_on)
+    if (s.type != "trip" && s.end_on)
         return "back to " PName(s.back) " at " HM(s.end_time)
     if (s.type = "trip")
         return "charge to " (profiles.Has(s.profile) ? profiles[s.profile].charge : 100) "%"
@@ -2382,32 +2540,41 @@ ShowSchedules(*) {
     g.SetFont("s10", "Segoe UI")
     g.MarginX := 16, g.MarginY := 12
 
-    master := g.Add("Checkbox", "xm", "Run schedules")
+    g.SetFont("s11 bold")
+    g.Add("Text", "xm w760", "Let Performance Companion switch for you")
+    g.SetFont("s10 norm")
+    ideas := "Weekly game night? Switch to Gaming every Friday at 7 pm, and back to Work at 11:30.`n"
+        . "Quiet evenings? Switch to a quiet profile every night at 10 pm.`n"
+        . "Work week? Switch to Work every weekday morning at 8."
+    if HasGH()
+        ideas := "Going on a trip? Tell it when you leave: it charges the battery to full in time and switches to Travel just before you go.`n" ideas
+    g.Add("Text", "xm y+6 w760", ideas)
+    g.SetFont("s9 cGray")
+    g.Add("Text", "xm y+6 w760", "You always get a heads-up before a restart or shutdown (with Postpone and Skip), switches wait while you're "
+        . "in a game, and if the laptop was off at the time, you're asked whether to catch up.")
+    g.SetFont("s10 norm cDefault")
+
+    master := g.Add("Checkbox", "xm y+12", "Run my schedules")
     master.Value := SCHEDULES_ENABLED
     g.SetFont("s10 bold")
     stateTx := g.Add("Text", "x+10 yp w300", "")
     g.SetFont("s10 norm")
-    AddTip(master, "Master switch. Off: nothing below runs, whatever each schedule says.`n"
-        . "Schedules ship turned off so the laptop never restarts by surprise.")
+    AddTip(master, "Turns all schedules on or off at once.`nSchedules start off, so the laptop never switches by surprise.")
     master.OnEvent("Click", (*) => (SetSchedulesEnabled(master.Value, !master.Value), Refresh(), UpdateUI()))
 
-    g.Add("Text", "xm y+10 w760", "Switch profiles on a timetable, or get the battery charged for a trip. Before any restart or "
-        . "shutdown you get a warning " WARN_MINUTES " and 2 minutes ahead with Postpone, Skip and Do it now. "
-        . "Switches wait while a game is running. If the laptop was off at the time, you're asked whether to catch up.")
-    lv := g.Add("ListView", "xm y+8 w760 r9 -Multi NoSort", ["On", "Name", "When", "Switch to", "Then", "Next"])
+    lv := g.Add("ListView", "xm y+8 w760 r8 -Multi NoSort", ["On", "Name", "When", "Switch to", "Then", "Next"])
     AddTip(lv, "Double-click a schedule to edit it.")
     lv.OnEvent("DoubleClick", (*) => EditSel())
 
-    b := g.Add("Button", "xm y+10 w110", "New weekly...")
-    b.OnEvent("Click", (*) => ShowScheduleEditor("", "weekly", Refresh))
-    AddTip(b, "Repeat on chosen days, like gaming every Friday 19:00,`noptionally switching back later.")
-    b := g.Add("Button", "x+6 w120", "New one-time...")
-    b.OnEvent("Click", (*) => ShowScheduleEditor("", "once", Refresh))
-    AddTip(b, "Switch once, at a set date and time.")
-    b := g.Add("Button", "x+6 w100" (HasGH() ? "" : " Hidden"), "New trip...")
-    b.OnEvent("Click", (*) => ShowScheduleEditor("", "trip", Refresh))
-    AddTip(b, "Tell it when you leave. It raises the charge limit early enough to be full at departure,`n"
-        . "reminds you to plug in, and can switch to your travel profile just before you go.")
+    b := g.Add("Button", "xm y+10 w130", "New schedule...")
+    b.OnEvent("Click", (*) => ShowScheduleEditor("", Refresh))
+    AddTip(b, "Switch profiles at a set time: once, or repeating every day, weekday, week, 2 weeks or month.")
+    if HasGH() {
+        b := g.Add("Button", "x+6 w110", "Plan a trip...")
+        b.OnEvent("Click", (*) => ShowTripEditor("", Refresh))
+        AddTip(b, "Tell it when you leave. It raises the charge limit early enough to be full at departure,`n"
+            . "reminds you to plug in, and can switch to your travel profile just before you go.")
+    }
     b := g.Add("Button", "x+18 w70", "Edit...")
     b.OnEvent("Click", (*) => EditSel())
     AddTip(b, "Edit the selected schedule.")
@@ -2434,7 +2601,7 @@ ShowSchedules(*) {
             nxt := !s.enabled ? "off" : !SCHEDULES_ENABLED ? "(schedules off)" : nx = "" ? "done" : FormatTime(nx, "ddd HH:mm")
             lv.Add(, s.enabled ? "Yes" : "No", s.name, WhenText(s), PName(s.profile), ThenText(s), nxt)
         }
-        lv.ModifyCol(1, 40), lv.ModifyCol(2, 120), lv.ModifyCol(3, 200), lv.ModifyCol(4, 100), lv.ModifyCol(5, 190), lv.ModifyCol(6, "AutoHdr")
+        lv.ModifyCol(1, 40), lv.ModifyCol(2, 130), lv.ModifyCol(3, 200), lv.ModifyCol(4, 100), lv.ModifyCol(5, 180), lv.ModifyCol(6, "AutoHdr")
     }
 
     SelId() {
@@ -2443,8 +2610,12 @@ ShowSchedules(*) {
     }
 
     EditSel() {
-        if ((id := SelId()) != "")
-            ShowScheduleEditor(id, schedules[id].type, Refresh)
+        if ((id := SelId()) = "")
+            return
+        if (schedules[id].type = "trip")
+            ShowTripEditor(id, Refresh)
+        else
+            ShowScheduleEditor(id, Refresh)
     }
 
     ToggleSel() {
@@ -2464,7 +2635,7 @@ ShowSchedules(*) {
             CancelPending(s.name " turned off")
         Refresh()
         if (s.enabled && !SCHEDULES_ENABLED)
-            MsgBox(s.name " is on, but schedules as a whole are off. Tick 'Run schedules' at the top to start them.",
+            MsgBox(s.name " is on, but schedules as a whole are off. Tick 'Run my schedules' at the top to start them.",
                 "Performance Companion schedules", "Iconi Owner" g.Hwnd)
     }
 
@@ -2491,21 +2662,42 @@ ShowSchedules(*) {
     }
 }
 
-; Edit one schedule. id "" = new of the given type. onSave is called after saving.
-ShowScheduleEditor(id, type, onSave) {
-    isNew := (id = "")
-    s := isNew ? NewSchedObj(type) : schedules[id]
+; Saves a schedule from an editor and tells the list. Shared by both editors.
+FinishScheduleSave(s, isNew, onSave) {
+    s.last_start := A_Now, s.last_end := A_Now        ; editing never triggers a "missed" switch
+    if (s.type = "trip")
+        s.last_charge := ""
     if isNew {
-        s.name := (type = "weekly") ? "Weekly switch" : (type = "once") ? "One-time switch" : "Trip"
-        s.profile := (type = "trip" && profiles.Has("travel")) ? "travel" : (type = "weekly" && profiles.Has("gaming")) ? "gaming" : profileOrder[1]
-        s.back := profiles.Has("everyday") ? "everyday" : profileOrder[1]
-        if (type = "weekly")
-            s.days := "6"
-        else
-            s.date := SubStr(DateAdd(A_Now, 1, "Days"), 1, 8), s.time := (type = "trip") ? "0700" : "1900"
-        s.enabled := 1
+        s.id := UniqueSchedId()
+        schedules[s.id] := s
+        schedOrder.Push(s.id)
+        SaveSchedOrder()
+    } else if (IsObject(schedPending) && schedPending.sid = s.id) {
+        CancelPending("schedule edited")
     }
-    g := Gui("+AlwaysOnTop", (isNew ? "New " : "Edit ") (type = "weekly" ? "weekly schedule" : type = "once" ? "one-time switch" : "trip"))
+    WriteSchedule(s)
+    Log("SCHEDULE    " (isNew ? "added " : "saved ") s.name ": " WhenText(s) " -> " PName(s.profile)
+        (ThenText(s) != "" ? ", " ThenText(s) : "") (s.enabled ? "" : " (off)"))
+    try onSave()                                       ; the list window may have been closed meanwhile
+    if (s.enabled && !SCHEDULES_ENABLED)
+        ShowOSD("Saved. Tick 'Run my schedules' to start it.", "Blue", true)
+    else
+        SetTimer(ScheduleTick, -500)
+}
+
+; New or edit: one form for one-time and repeating schedules.
+ShowScheduleEditor(id, onSave) {
+    isNew := (id = "")
+    if isNew {
+        s := NewSchedObj("once")
+        s.name := "", s.enabled := 1, s.days := "6"
+        s.profile := profiles.Has("gaming") ? "gaming" : profileOrder[1]
+        s.back := profiles.Has("everyday") ? "everyday" : profileOrder[1]
+        s.date := SubStr(A_Now, 1, 8), s.time := "1900"
+    } else {
+        s := schedules[id]
+    }
+    g := Gui("+AlwaysOnTop", isNew ? "New schedule" : "Edit schedule")
     g.SetFont("s10", "Segoe UI")
     g.MarginX := 16, g.MarginY := 12
     names := []
@@ -2513,69 +2705,162 @@ ShowScheduleEditor(id, type, onSave) {
         names.Push(profiles[pid].name)
 
     Lbl(text, tip := "") {
-        t := g.Add("Text", "xm y+12 w150", text)
+        t := g.Add("Text", "xm y+12 w120", text)
         if (tip != "")
             AddTip(t, tip)
     }
 
     Lbl("Name")
-    nameEd := g.Add("Edit", "x+4 yp-3 w260", s.name)
-
-    dayCbs := Map(), dateCtl := 0, everyDdl := 0, endCb := 0, endTm := 0, backDdl := 0, beforeDdl := 0
-    if (type = "weekly") {
-        Lbl("Days")
-        first := true
-        for d in DayOrder() {
-            cb := g.Add("Checkbox", (first ? "x+4 yp" : "x+6 yp") " w50", DayShort(d))
-            cb.Value := InStr("," s.days ",", "," d ",") ? 1 : 0
-            dayCbs[d] := cb, first := false
-        }
-        Lbl("Repeat", "Every other week counts from the week this schedule was created.")
-        everyDdl := g.Add("DropDownList", "x+4 yp-3 w160", ["Every week", "Every other week"])
-        everyDdl.Choose(s.every = 2 ? 2 : 1)
-    } else {
-        Lbl(type = "trip" ? "Leaving on" : "Date")
-        dateCtl := g.Add("DateTime", "x+4 yp-3 w200", "ddd yyyy-MM-dd")
-        dateCtl.Value := s.date "000000"
-    }
-    Lbl(type = "trip" ? "Departure time" : "Time")
-    timeCtl := g.Add("DateTime", "x+4 yp-3 w90 1", "HH:mm")
-    timeCtl.Value := "20000101" s.time "00"
-
-    tipProf := (type = "trip") ? "The profile you travel in. Its charge limit is what the battery is charged to."
-        : "The profile to switch to at this time."
-    Lbl(type = "trip" ? "Travel profile" : "Switch to", tipProf)
-    profDdl := g.Add("DropDownList", "x+4 yp-3 w260", names)
+    nameEd := g.Add("Edit", "x+4 yp-3 w300", s.name)
+    DllCall("SendMessage", "Ptr", nameEd.Hwnd, "UInt", 0x1501, "Ptr", 1, "WStr", "e.g. Game night")
+    Lbl("Switch to", "The profile to switch to.")
+    profDdl := g.Add("DropDownList", "x+4 yp-3 w300", names)
     profDdl.Choose(profiles.Has(s.profile) ? IndexOf(profileOrder, s.profile) : 1)
-    AddTip(profDdl, tipProf)
-
-    if (type = "weekly") {
-        endCb := g.Add("Checkbox", "xm y+14 w150", "Switch back at")
-        endCb.Value := s.end_on
-        AddTip(endCb, "End the session automatically, for example back to Work at 23:30.`n"
-            . "A time earlier than the start means the next day. Also waits for a running game.")
-        endTm := g.Add("DateTime", "x+4 yp-3 w90 1", "HH:mm")
-        endTm.Value := "20000101" s.end_time "00"
-        g.Add("Text", "x+8 yp+3", "to")
-        backDdl := g.Add("DropDownList", "x+8 yp-3 w200", names)
-        backDdl.Choose(profiles.Has(s.back) ? IndexOf(profileOrder, s.back) : 1)
-    }
-    if (type = "trip") {
-        Lbl("Before departure", "Switching to a travel profile usually shuts the laptop down, so it's packed and ready.`n"
-            . "The battery keeps charging while it's off.")
-        beforeDdl := g.Add("DropDownList", "x+4 yp-3 w300", ["Only charge, don't switch", "Switch 15 minutes before",
-            "Switch 30 minutes before", "Switch 60 minutes before"])
-        beforeDdl.Choose(s.before = 0 ? 1 : s.before = 30 ? 3 : s.before = 60 ? 4 : 2)
-        g.SetFont("s9 cGray")
-        g.Add("Text", "xm y+10 w420", "Charging starts early enough to be full at departure, based on how fast this laptop "
-            . "has charged before (now about " ChargeRate() "% an hour), plus a 20 minute buffer. If you're unplugged "
-            . "you'll be reminded to plug in.")
-        g.SetFont("s10 norm cDefault")
+    Lbl("Date", "When it happens, or for a repeating schedule, when it starts.")
+    dateCtl := g.Add("DateTime", "x+4 yp-3 w220", "ddd, MMM d, yyyy")
+    dateCtl.Value := s.date "000000"
+    timeCtl := g.Add("DateTime", "x+8 yp w72 1", "HH:mm")
+    timeCtl.Value := "20000101" s.time "00"
+    Lbl("Repeat")
+    repDdl := g.Add("DropDownList", "x+4 yp-3 w300", RepeatNames(Integer(SubStr(s.date, 7, 2))))
+    repDdl.Choose(isNew ? 1 : RepeatOf(s))
+    Lbl("On these days")
+    dayCbs := Map(), first := true
+    for d in DayOrder() {
+        cb := g.Add("Checkbox", (first ? "x+4 yp" : "x+4 yp") " w48", DayShort(d))
+        cb.Value := InStr("," s.days ",", "," d ",") ? 1 : 0
+        dayCbs[d] := cb, first := false
     }
 
-    enCb := g.Add("Checkbox", "xm y+14", "This schedule is on")
+    endCb := g.Add("Checkbox", "xm y+16 w120", "Switch back at")
+    endCb.Value := s.end_on
+    AddTip(endCb, "End it automatically, for example back to Work at 23:30.`n"
+        . "A time earlier than the start means the next day. Waits for a running game, too.")
+    endTm := g.Add("DateTime", "x+4 yp-3 w90 1", "HH:mm")
+    endTm.Value := "20000101" s.end_time "00"
+    g.Add("Text", "x+8 yp+3", "to")
+    backDdl := g.Add("DropDownList", "x+8 yp-3 w170", names)
+    backDdl.Choose(profiles.Has(s.back) ? IndexOf(profileOrder, s.back) : 1)
+
+    enCb := g.Add("Checkbox", "xm y+16", "This schedule is on")
     enCb.Value := s.enabled
-    AddTip(enCb, "Also needs 'Run schedules' ticked in the Schedules window.")
+    AddTip(enCb, "Also needs 'Run my schedules' ticked in the Schedules window.")
+    b := g.Add("Button", "xm y+14 w90 Default", "Save")
+    b.OnEvent("Click", (*) => Save())
+    b := g.Add("Button", "x+8 w90", "Cancel")
+    b.OnEvent("Click", (*) => CloseWin())
+    g.OnEvent("Close", (*) => CloseWin())
+    g.OnEvent("Escape", (*) => CloseWin())
+
+    repDdl.OnEvent("Change", (*) => SyncDays())
+    dateCtl.OnEvent("Change", (*) => SyncDays())
+    endCb.OnEvent("Click", (*) => SyncDays())
+    SyncDays()
+    g.Show()
+
+    ; Day boxes only matter for the weekly choices; the monthly label follows the date.
+    SyncDays() {
+        r := repDdl.Value
+        dom := Integer(FormatTime(dateCtl.Value, "d"))
+        repDdl.Delete(), repDdl.Add(RepeatNames(dom)), repDdl.Choose(r)
+        for d, cb in dayCbs
+            cb.Enabled := (r = 4 || r = 5)
+        endTm.Enabled := endCb.Value, backDdl.Enabled := endCb.Value
+    }
+
+    Save() {
+        r := repDdl.Value
+        s.name := Trim(nameEd.Value) != "" ? Trim(nameEd.Value) : "Switch to " profiles[profileOrder[profDdl.Value]].name
+        s.profile := profileOrder[profDdl.Value]
+        s.date := FormatTime(dateCtl.Value, "yyyyMMdd")
+        s.time := FormatTime(timeCtl.Value, "HHmm")
+        s.every := 1
+        switch r {
+            case 1: s.type := "once"
+            case 2: s.type := "weekly", s.days := "2,3,4,5,6,7,1"
+            case 3: s.type := "weekly", s.days := "2,3,4,5,6"
+            case 6: s.type := "monthly"
+            default:
+                ds := []
+                for d in DayOrder()
+                    if dayCbs[d].Value
+                        ds.Push(d)
+                if !ds.Length {
+                    MsgBox("Pick at least one day.", g.Title, "Icon! Owner" g.Hwnd)
+                    return
+                }
+                s.type := "weekly", s.days := Join(ds, ",")
+                if (r = 5)
+                    s.every := 2, s.anchor := WeekStart(s.date "000000")
+        }
+        s.end_on := endCb.Value
+        s.end_time := FormatTime(endTm.Value, "HHmm")
+        s.back := profileOrder[backDdl.Value]
+        if (s.end_on && s.back = s.profile) {
+            MsgBox("Switch back to a different profile than the one it switches to.", g.Title, "Icon! Owner" g.Hwnd)
+            return
+        }
+        if (s.type = "once" && (s.date s.time "00") <= A_Now && enCb.Value
+            && MsgBox("That time has already passed, so this won't run. Save anyway?", g.Title, "YesNo Icon? Owner" g.Hwnd) != "Yes")
+            return
+        s.enabled := enCb.Value
+        CloseWin()
+        FinishScheduleSave(s, isNew, onSave)
+    }
+
+    CloseWin() {
+        ClearTips(g)
+        g.Destroy()
+    }
+}
+
+; Trips: charge to full in time for departure, then switch to travel.
+ShowTripEditor(id, onSave) {
+    isNew := (id = "")
+    if isNew {
+        s := NewSchedObj("trip")
+        s.name := "Trip", s.enabled := 1, s.before := 15
+        s.profile := profiles.Has("travel") ? "travel" : profileOrder[1]
+        s.date := SubStr(DateAdd(A_Now, 1, "Days"), 1, 8), s.time := "0700"
+    } else {
+        s := schedules[id]
+    }
+    g := Gui("+AlwaysOnTop", isNew ? "Plan a trip" : "Edit trip")
+    g.SetFont("s10", "Segoe UI")
+    g.MarginX := 16, g.MarginY := 12
+    names := []
+    for pid in profileOrder
+        names.Push(profiles[pid].name)
+    g.SetFont("s11 bold")
+    g.Add("Text", "xm w440", "Going on a trip?")
+    g.SetFont("s10 norm")
+    g.Add("Text", "xm y+4 w440", "Tell Performance Companion when you leave. It charges your battery to full just in time "
+        . "(so it isn't sitting at 100% all week), reminds you to plug in, and switches to your travel profile right before you go.")
+
+    Lbl(text, tip := "") {
+        t := g.Add("Text", "xm y+12 w130", text)
+        if (tip != "")
+            AddTip(t, tip)
+    }
+    Lbl("Leaving on")
+    dateCtl := g.Add("DateTime", "x+4 yp-3 w220", "ddd, MMM d, yyyy")
+    dateCtl.Value := s.date "000000"
+    timeCtl := g.Add("DateTime", "x+8 yp w90 1", "HH:mm")
+    timeCtl.Value := "20000101" s.time "00"
+    Lbl("Travel profile", "The profile you travel in. Its charge limit is what the battery is charged to.")
+    profDdl := g.Add("DropDownList", "x+4 yp-3 w300", names)
+    profDdl.Choose(profiles.Has(s.profile) ? IndexOf(profileOrder, s.profile) : 1)
+    Lbl("Before you leave", "Switching to a travel profile usually shuts the laptop down, so it's packed and ready.`n"
+        . "The battery keeps charging while it's off.")
+    beforeDdl := g.Add("DropDownList", "x+4 yp-3 w300", ["Just charge, don't switch", "Switch 15 minutes before",
+        "Switch 30 minutes before", "Switch 60 minutes before"])
+    beforeDdl.Choose(s.before = 0 ? 1 : s.before = 30 ? 3 : s.before = 60 ? 4 : 2)
+    g.SetFont("s9 cGray")
+    g.Add("Text", "xm y+10 w440", "Charging starts based on how fast this laptop has charged before (now about "
+        . ChargeRate() "% an hour), plus a 20 minute buffer.")
+    g.SetFont("s10 norm cDefault")
+    enCb := g.Add("Checkbox", "xm y+12", "This trip is on")
+    enCb.Value := s.enabled
     b := g.Add("Button", "xm y+14 w90 Default", "Save")
     b.OnEvent("Click", (*) => Save())
     b := g.Add("Button", "x+8 w90", "Cancel")
@@ -2585,67 +2870,17 @@ ShowScheduleEditor(id, type, onSave) {
     g.Show()
 
     Save() {
-        n := Trim(nameEd.Value)
-        if (n = "") {
-            MsgBox("Give the schedule a name.", g.Title, "Icon! Owner" g.Hwnd)
-            return
-        }
-        s.name := n
+        s.date := FormatTime(dateCtl.Value, "yyyyMMdd")
         s.time := FormatTime(timeCtl.Value, "HHmm")
         s.profile := profileOrder[profDdl.Value]
-        if (type = "weekly") {
-            ds := []
-            for d in DayOrder()
-                if dayCbs[d].Value
-                    ds.Push(d)
-            if !ds.Length {
-                MsgBox("Pick at least one day.", g.Title, "Icon! Owner" g.Hwnd)
-                return
-            }
-            s.days := Join(ds, ",")
-            newEvery := everyDdl.Value = 2 ? 2 : 1
-            if (newEvery = 2 && s.every != 2)
-                s.anchor := WeekStart(A_Now)
-            s.every := newEvery
-            s.end_on := endCb.Value
-            s.end_time := FormatTime(endTm.Value, "HHmm")
-            s.back := profileOrder[backDdl.Value]
-            if (s.end_on && s.back = s.profile) {
-                MsgBox("Switch back to a different profile than the one it switches to.", g.Title, "Icon! Owner" g.Hwnd)
-                return
-            }
-        } else {
-            s.date := FormatTime(dateCtl.Value, "yyyyMMdd")
-            if (type = "trip")
-                s.before := [0, 15, 30, 60][beforeDdl.Value]
-            when := s.date s.time "00"
-            if (when <= A_Now && enCb.Value) {
-                if (MsgBox("That time has already passed, so this won't run. Save anyway?", g.Title, "YesNo Icon? Owner" g.Hwnd) != "Yes")
-                    return
-            }
-        }
+        s.before := [0, 15, 30, 60][beforeDdl.Value]
+        s.name := "Trip " FormatTime(s.date "000000", "MMM d")
+        if ((s.date s.time "00") <= A_Now && enCb.Value
+            && MsgBox("That time has already passed, so this won't run. Save anyway?", g.Title, "YesNo Icon? Owner" g.Hwnd) != "Yes")
+            return
         s.enabled := enCb.Value
-        ; Start counting from now: editing never triggers a "missed" switch.
-        s.last_start := A_Now, s.last_end := A_Now
-        if (type = "trip")
-            s.last_charge := ""
-        if isNew {
-            s.id := UniqueSchedId()
-            schedules[s.id] := s
-            schedOrder.Push(s.id)
-            SaveSchedOrder()
-        } else if (IsObject(schedPending) && schedPending.sid = s.id) {
-            CancelPending("schedule edited")
-        }
-        WriteSchedule(s)
-        Log("SCHEDULE    " (isNew ? "added " : "saved ") s.name ": " WhenText(s) " -> " PName(s.profile)
-            (ThenText(s) != "" ? ", " ThenText(s) : "") (s.enabled ? "" : " (off)"))
         CloseWin()
-        try onSave()                      ; the list window may have been closed meanwhile
-        if (s.enabled && !SCHEDULES_ENABLED)
-            ShowOSD("Saved. Tick 'Run schedules' to start it.", "Blue", true)
-        else
-            SetTimer(ScheduleTick, -500)
+        FinishScheduleSave(s, isNew, onSave)
     }
 
     CloseWin() {
@@ -4165,37 +4400,15 @@ BuildMenu() {
         m.Add("Switch to", sw)
     }
     m.Add("Profiles...", ShowProfiles)
-    if !HasGH()
-        m.Add("Power plans...", ShowPlans)
     nx := NextScheduleText()
     m.Add("Schedules..." (nx != "" ? "   (" nx ")" : SCHEDULES_ENABLED ? "" : "   (off)"), ShowSchedules)
     m.Add()
     m.Add("Apps and games...", ShowGames)
     m.Add("Settings...", ShowSettings)
 
-    ; Diagnostics live one level down, out of the way of everyday use.
-    tr := Menu()
-    tr.Add("Status", ShowStatus)
-    tr.Add("Report an issue...", ReportIssue)
-    tr.Add("Check for updates", (*) => CheckForUpdates(true))
-    tr.Add("Copy diagnostics (for bug reports)", CopyDiagnostics)
-    tr.Add("Open activity log", (*) => FileExist(LOGFILE) ? Run('notepad.exe "' LOGFILE '"') : ShowOSD("No activity logged yet", "Blue", true))
-    tr.Add("Clear activity log", ClearLog)
-    tr.Add("Watch GPU load (live)", ToggleWatch)
-    if watchGpu
-        tr.Check("Watch GPU load (live)")
-    tr.Add("Setup check...", (*) => ShowSetupCheck("manual"))
-    if HasGH()
-        tr.Add("Run G-Helper self-test", (*) => SelfTest(CurrentVersion()))
-    tr.Add()
-    tr.Add("Pause automation", TogglePause)
-    if paused
-        tr.Check("Pause automation")
-    tr.Add("Reload", (*) => Reload())
-    tr.Add()
-    tr.Add("Uninstall...", Uninstall)
-    m.Add("Troubleshooting", tr)
-
+    m.Add()
+    m.Add("Report an issue...", ReportIssue)
+    m.Add("Help and troubleshooting...", ShowHelp)
     m.Add()
     m.Add("Exit", (*) => ExitApp())
 }
@@ -4299,6 +4512,95 @@ ClearLog(*) {
     Log("LOG         cleared")
     ShowOSD("Activity log cleared", "Green", true)
 }
+
+; ---------- Help and troubleshooting window ----------
+; Everything diagnostic in one place, so the tray menu stays short.
+ShowHelp(*) {
+    static open := 0
+    if open {
+        try WinActivate("ahk_id " open)
+        return
+    }
+    g := Gui("+AlwaysOnTop", "Performance Companion help and troubleshooting")
+    open := g.Hwnd
+    g.SetFont("s10", "Segoe UI")
+    g.MarginX := 16, g.MarginY := 12
+    g.Add("Text", "xm w520", "Something not right? Report an issue sends us everything needed to fix it. "
+        . "The rest is here if you want to look under the hood. Version " SCRIPT_VERSION ", " EngineName() ".")
+
+    Btn(label, desc, fn, first := false) {
+        b := g.Add("Button", "xm " (first ? "y+14" : "y+6") " w190", label)
+        b.OnEvent("Click", fn)
+        g.SetFont("s9 cGray")
+        g.Add("Text", "x+10 yp+5 w320", desc)
+        g.SetFont("s10 norm cDefault")
+        return b
+    }
+    Head(text) {
+        g.SetFont("s10 bold")
+        g.Add("Text", "xm y+16 w520", text)
+        g.SetFont("s10 norm")
+    }
+
+    Btn("Report an issue...", "Opens a bug report with your diagnostics filled in.", (*) => (Close(), ReportIssue()), true)
+    Btn("Online guide", "The README: setup, everyday use and fixes for common problems.", (*) => Run(REPO_URL "#readme"))
+    Btn("Check for updates", "See if there's a newer version now.", (*) => CheckForUpdates(true))
+
+    Head("Look under the hood")
+    Btn("Status", "What profile, mode and engine are active right now.", ShowStatus, true)
+    Btn("Setup check", "Checks your setup and your maker's app settings.", (*) => ShowSetupCheck("manual"))
+    Btn("Open activity log", "One line per decision, with times.",
+        (*) => FileExist(LOGFILE) ? Run('notepad.exe "' LOGFILE '"') : ShowOSD("No activity logged yet", "Blue", true))
+    Btn("Copy diagnostics", "Copies the full report to paste anywhere yourself.", CopyDiagnostics)
+    wb := Btn(watchGpu ? "Stop watching GPU load" : "Watch GPU load", "A live panel showing which app loads the GPU and by how much.",
+        (*) => (ToggleWatch(), wb.Text := watchGpu ? "Stop watching GPU load" : "Watch GPU load"))
+    if HasGH()
+        Btn("Run G-Helper self-test", "Re-checks that G-Helper responds as expected.", (*) => SelfTest(CurrentVersion()))
+
+    Head("Fix things")
+    pb := Btn(paused ? "Resume automation" : "Pause automation", "Stops (or restarts) all automatic switching for now.",
+        (*) => (TogglePause(), pb.Text := paused ? "Resume automation" : "Pause automation"))
+    Btn("Reload", "Restarts Performance Companion. Settings are kept.", (*) => Reload())
+    Btn("Clear activity log", "Deletes the log. It also trims itself automatically.", ClearLog)
+    Btn("Reset everything...", "Settings, profiles" (HasGH() ? "" : " and power plans") " back to the defaults.", (*) => ResetEverything())
+    Btn("Uninstall...", "Removes Performance Companion from this PC.", Uninstall)
+
+    b := g.Add("Button", "xm y+18 w90 Default", "Close")
+    b.OnEvent("Click", (*) => Close())
+    g.OnEvent("Close", (*) => Close())
+    g.OnEvent("Escape", (*) => Close())
+    g.Show()
+
+    Close() {
+        open := 0
+        ClearTips(g)
+        g.Destroy()
+    }
+
+    ResetEverything() {
+        r := MsgBox("Put Performance Companion back to how it was on install?`n`n"
+            . "Resets all settings and profiles" (HasGH() ? "" : ", and the power plan settings") ", and turns schedules off.`n`n"
+            . "Keep your games and apps list (learned, added and their modes)?`n"
+            . "Yes = keep them, No = clear them too, Cancel = do nothing.",
+            "Reset everything", "YesNoCancel Icon! Owner" g.Hwnd)
+        if (r = "Cancel")
+            return
+        Log("RESET       everything back to defaults" (r = "No" ? ", games cleared" : ", games kept"))
+        ResetSettings()
+        SetSchedulesEnabled(false, SCHEDULES_ENABLED)
+        if !HasGH()
+            for k in PlanKeys() {
+                try IniDelete(STATE, "plan." k)
+                ApplyPlanSettings(k)
+            }
+        RestoreDefaultProfiles()
+        if (r = "No")
+            for sec in ["learned", "added", "gamemodes", "notgames", "seen"]
+                try IniDelete(STATE, sec)
+        Close()
+        Reload()
+    }
+}
 ; ====================================================================
 ;  HOTKEYS
 ; ====================================================================
@@ -4394,7 +4696,7 @@ GlobalError(e, mode) {
         busy := false, switching := false          ; never leave automation stuck after an error
         if (A_TickCount - lastNotice > 60000) {
             lastNotice := A_TickCount
-            ShowOSD("Performance Companion hit an error and logged it. Troubleshooting > Copy diagnostics", "Red", true)
+            ShowOSD("Performance Companion hit an error and logged it. Tray > Report an issue", "Red", true)
         }
     }
     return (mode = "ExitApp") ? 0 : 1                ; 1 = handled: no dialog, keep running
@@ -4932,7 +5234,7 @@ VendorTips() {
 ;
 ;  Three plans, created once as copies of Windows' Balanced plan (so your
 ;  sleep and screen-off timers carry over) and kept in sync with
-;  Tray > Power plans. Their GUIDs live in state.ini [plans].
+;  Settings > advanced > Edit power plans. Their GUIDs live in state.ini [plans].
 ;
 ;    mode 2  Eco          mode 0  Work          mode 1  Performance
 ;
@@ -5334,7 +5636,7 @@ ApplyRefresh(k) {
 }
 
 
-; ---------- power plans window (Tray > Power plans) ----------
+; ---------- power plans window (Settings > advanced > Edit power plans) ----------
 ShowPlans(*) {
     static open := 0
     if open {
