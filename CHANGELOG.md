@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.0.7 (October 2026)
+
+- **Fixed: the tray icon was sometimes missing after Windows starts** (issue #2). Performance Companion was running, but it started before the taskbar was ready, and Windows blocks the "taskbar is ready" signal from reaching elevated apps. It now listens for that signal and re-adds its icon after login and whenever Explorer restarts.
+- Charge rate shows as a whole number.
+
 ## 3.0.6 (October 2026)
 
 - **Ask me on battery:** a new Game modes choice in Profiles. Plugged in, games get full power automatically. On battery, a small prompt asks first ("Yes, full power" / "No, save battery"); no answer in 20 seconds means save battery. It asks once per game session.

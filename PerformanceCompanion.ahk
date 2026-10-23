@@ -30,7 +30,7 @@ SetTitleMatchMode 2
 ;  Replaces G14 Control, Laptop Control and Clutch: settings carry over.
 ; ====================================================================
 
-global SCRIPT_VERSION := "3.0.6"      ; bump on every release so updates announce themselves
+global SCRIPT_VERSION := "3.0.7"      ; bump on every release so updates announce themselves
 global APP_NAME       := "Performance Companion"
 global REPO_URL       := "https://github.com/zonearc/PerformanceCompanion"
 
@@ -245,6 +245,7 @@ SetTimer(StartupSequence, -500)
 SetTimer(PromoteTrayIcon, -8000)
 SetTimer(ChargeRateSample, 60000)
 OnMessage(0x404, TrayIconMsg)       ; tray icon events
+WatchTaskbar()                      ; tray icon survives early login and Explorer restarts
 
 TrayIconMsg(wParam, lParam, *) {
     if (lParam = 0x205)              ; right button up: refresh before the menu shows
@@ -2864,7 +2865,7 @@ ShowTripEditor(id, onSave) {
     beforeDdl.Choose(s.before = 0 ? 1 : s.before = 30 ? 3 : s.before = 60 ? 4 : 2)
     g.SetFont("s9 cGray")
     g.Add("Text", "xm y+10 w440", "Charging starts based on how fast this laptop has charged before (now about "
-        . ChargeRate() "% an hour), plus a 20 minute buffer.")
+        . Round(ChargeRate()) "% an hour), plus a 20 minute buffer.")
     g.SetFont("s10 norm cDefault")
     enCb := g.Add("Checkbox", "xm y+12", "This trip is on")
     enCb.Value := s.enabled
@@ -2939,14 +2940,43 @@ WriteBase64File(b64, path) {
 }
 
 ; Tray icon follows the profile's chosen icon; grey when paused.
-UpdateTrayIcon() {
+UpdateTrayIcon(force := false) {
     static last := ""
     name := (paused || !automationOK) ? "paused" : CurP().icon
-    if (name = last || !FileExist(IconPath(name)))
+    if ((name = last && !force) || !FileExist(IconPath(name)))
         return
     try {
         TraySetIcon(IconPath(name))
         last := name
+    }
+}
+
+; Started at login, Performance Companion can be up before the taskbar is
+; ready, so its tray icon never appears even though it's running. Windows
+; announces a fresh taskbar with "TaskbarCreated", but blocks that message
+; from reaching elevated apps like this one unless they opt in. So: opt in,
+; re-add the icon when it arrives, and re-add it a few times after login.
+WatchTaskbar() {
+    msg := DllCall("RegisterWindowMessage", "Str", "TaskbarCreated", "UInt")
+    try DllCall("ChangeWindowMessageFilterEx", "Ptr", A_ScriptHwnd, "UInt", msg, "UInt", 1, "Ptr", 0)
+    OnMessage(msg, (*) => (SetTimer(ReAddTrayIcon, -1500), 0))
+    for ms in [5000, 20000, 60000]
+        SetTimer(ReAddTrayIcon, -ms)
+}
+
+ReAddTrayIcon() {
+    static logged := false
+    if !WinExist("ahk_class Shell_TrayWnd") {
+        SetTimer(ReAddTrayIcon, -5000)              ; taskbar not up yet: try again shortly
+        return
+    }
+    A_IconHidden := true                            ; hide and show re-registers the icon
+    A_IconHidden := false
+    UpdateTrayIcon(true)
+    UpdateTip()
+    if !logged {
+        logged := true
+        Log("TRAY        icon refreshed after login")
     }
 }
 
@@ -4870,7 +4900,7 @@ BuildDiagnostics() {
     r .= "`n[Settings]`n  "
     for name in SettingNames()
         r .= name "=" GetSetting(name) (GetSetting(name) != SETTING_DEFAULTS[name] ? "*" : "") "  "
-    r .= "`n  (* = changed from default)  charge rate " ChargeRate() "%/h`n"
+    r .= "`n  (* = changed from default)  charge rate " Round(ChargeRate()) "%/h`n"
 
     ; ---- schedules ----
     r .= "`n[Schedules] " (SCHEDULES_ENABLED ? "ON" : "off") (IsObject(schedPending) ? ", one pending" : "") "`n"
