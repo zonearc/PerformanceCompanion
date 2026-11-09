@@ -30,7 +30,7 @@ SetTitleMatchMode 2
 ;  Replaces G14 Control, Laptop Control and Clutch: settings carry over.
 ; ====================================================================
 
-global SCRIPT_VERSION := "3.0.7"      ; bump on every release so updates announce themselves
+global SCRIPT_VERSION := "3.0.8"      ; bump on every release so updates announce themselves
 global APP_NAME       := "Performance Companion"
 global REPO_URL       := "https://github.com/zonearc/PerformanceCompanion"
 
@@ -4655,6 +4655,9 @@ ShowHelp(*) {
         Btn("Run G-Helper self-test", "Re-checks that G-Helper responds as expected.", (*) => SelfTest(CurrentVersion()))
 
     Head("Fix things")
+    rb := Btn("Reset graphics driver...", "Fixes flickering and black windows without a reboot.", ResetGraphicsDriver)
+    AddTip(rb, "Restarts the display driver without rebooting. Fixes most screen flickering,`n"
+        . "black windows and frozen displays. Screens go black for about two seconds.")
     pb := Btn(paused ? "Resume" : "Pause", "Stops (or restarts) all automatic switching for now.",
         (*) => (TogglePause(), pb.Text := paused ? "Resume" : "Pause"))
     Btn("Reload", "Restarts Performance Companion. Settings are kept.", (*) => Reload())
@@ -4697,6 +4700,45 @@ ShowHelp(*) {
         Close()
         Reload()
     }
+}
+
+; ---------- Reset graphics driver ----------
+; Sends Win+Ctrl+Shift+B, Windows' own display driver restart. A Windows
+; feature, so it works on every engine and without G-Helper. Meant for
+; flicker and black windows; a fully hung GPU is Windows' TDR territory.
+ResetGraphicsDriver(*) {
+    static last := 0
+    if (A_TickCount - last < 5000)          ; double-click guard
+        return
+    if switching {                          ; a profile switch may be holding input
+        ShowOSD("Switching profiles; try again in a moment", "Blue", true)
+        return
+    }
+    if (isTurboMode && turboExe != "")
+        msg := "A game is running (" turboExe ").`n`nRestarting the graphics driver may crash or minimize fullscreen games.`n"
+            . "Close the game first if you can.`n`nContinue anyway?", icon := "Icon!"
+    else
+        msg := "This restarts the graphics driver.`n`nYour screens will go black and beep for about two seconds, then come back.`n"
+            . "Open programs keep running.`n`nUse it when the screen is flickering, frozen, or showing black windows.`n`nContinue?", icon := "Iconi"
+    if (MsgBox(msg, "Reset graphics driver", "YesNo Default2 " icon) != "Yes")
+        return
+    if switching
+        return
+    last := A_TickCount
+    Sleep(300)                              ; let the dialog close before the screens blank
+    SendDriverResetKeys()
+    Log("DISPLAY RESET  graphics driver reset requested by user")
+}
+
+; keybd_event, like the G-Helper hotkeys. Win+Ctrl+Shift+B isn't a secure
+; sequence, so Windows accepts it from software.
+SendDriverResetKeys() {
+    static keys := [0x5B, 0x11, 0x10, 0x42]  ; LWin, Ctrl, Shift, B
+    for k in keys
+        DllCall("keybd_event", "UChar", k, "UChar", 0, "UInt", 0, "UPtr", 0)
+    Sleep(40)
+    Loop keys.Length
+        DllCall("keybd_event", "UChar", keys[keys.Length - A_Index + 1], "UChar", 0, "UInt", 2, "UPtr", 0)
 }
 ; ====================================================================
 ;  HOTKEYS

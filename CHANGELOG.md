@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.0.8 (November 2026)
+
+- **Reset graphics driver** (Help and troubleshooting > Fix things): restarts the display driver without rebooting, the same as Windows' Win+Ctrl+Shift+B shortcut. Clears most screen flickering, black windows and frozen displays; the screens go black and beep for about two seconds. It asks first, and warns if a game is running because fullscreen games may crash or minimize. Works on every laptop, with or without G-Helper.
+
 ## 3.0.7 (October 2026)
 
 - **Fixed: the tray icon was sometimes missing after Windows starts** (issue #2). Performance Companion was running, but it started before the taskbar was ready, and Windows blocks the "taskbar is ready" signal from reaching elevated apps. It now listens for that signal and re-adds its icon after login and whenever Explorer restarts.
