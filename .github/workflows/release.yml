@@ -1,0 +1,25 @@
+# Publishes a GitHub release when a version tag (v1.2.3) is pushed.
+# Checks the tag matches SCRIPT_VERSION, attaches PerformanceCompanion-<version>.ahk
+# and uses release-notes/<tag>.md as the notes.
+name: Release
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          VER="${TAG#v}"
+          grep -q "SCRIPT_VERSION := \"$VER\"" PerformanceCompanion.ahk || { echo "SCRIPT_VERSION does not match $TAG"; exit 1; }
+          cp PerformanceCompanion.ahk "PerformanceCompanion-$VER.ahk"
+          NOTES="release-notes/$TAG.md"
+          [ -f "$NOTES" ] || { echo "See CHANGELOG.md" > /tmp/notes.md; NOTES=/tmp/notes.md; }
+          gh release create "$TAG" "PerformanceCompanion-$VER.ahk" --title "$TAG" --notes-file "$NOTES" --latest
